@@ -395,29 +395,7 @@
     </div>
 </div>
 
-<!-- FRAME LỖI TOÀN MÀN HÌNH -->
-<div id="error-overlay" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-    <div class="modal-fade-enter bg-gray-800 rounded-2xl shadow-2xl p-8 w-full max-w-md border border-red-500/50 flex flex-col items-center gap-4 text-white text-center">
-        <!-- Biển báo -->
-        <svg class="w-20 h-20 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-        </svg>
-        
-        <h2 id="error-title" class="text-2xl font-bold">Có Lỗi Xảy Ra Với FoxAI</h2>
-        <p id="error-subtitle" class="text-gray-300">Lỗi từ mô hình Smart, chúng tôi đang khắc phục!</p>
-        
-        <!-- Nút chuyển ngôn ngữ -->
-        <button id="error-lang-switch-btn" class="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition btn-interaction">
-            Switch to English
-        </button>
-    </div>
-</div>
-
-
 <script>
-    // Setting bao tri hay khong
-    let isErrorOverlayVisibleOnLoad = false; 
-
     //=====================================================================//
     // NEW: ENERGY CONFIGURATION BOX                                       //
     // Dễ dàng điều chỉnh các thông số Năng lượng tại đây.                    //
@@ -657,7 +635,7 @@
 
     const apiConfig = {
         'Mini': {
-            key: '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',
+            key: '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',
             model: 'openai/gpt-oss-20b:free'
         },
         'Smart': {
@@ -665,7 +643,7 @@
             model: 'minimax/minimax-m2:free'
         },
         'Nerd': {
-            key: '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',
+            key: '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',
             model: 'kwaipilot/kat-coder-pro:free'
         }
     };
@@ -1104,39 +1082,6 @@
     newChatHeaderBtn.addEventListener('click', startNewChat);
 
     document.addEventListener('DOMContentLoaded', () => {
-        // --- LOGIC CHO KHUNG LỖI ---
-        const errorOverlay = document.getElementById('error-overlay');
-        const errorLangSwitchBtn = document.getElementById('error-lang-switch-btn');
-        const errorTitle = document.getElementById('error-title');
-        const errorSubtitle = document.getElementById('error-subtitle');
-        let isErrorInEnglish = false; // Ban đầu là tiếng Việt
-
-        function updateErrorLanguage() {
-            if (isErrorInEnglish) {
-                errorTitle.textContent = "An Error Occurred with FoxAI";
-                errorSubtitle.textContent = "Error from Smart model, we are fixing it!";
-                errorLangSwitchBtn.textContent = "Chuyển sang Tiếng Việt";
-            } else {
-                errorTitle.textContent = "Có Lỗi Xảy Ra Với FoxAI";
-                errorSubtitle.textContent = "Lỗi từ mô hình Smart, chúng tôi đang khắc phục!";
-                errorLangSwitchBtn.textContent = "Switch to English";
-            }
-        }
-        
-        errorLangSwitchBtn.addEventListener('click', () => {
-            isErrorInEnglish = !isErrorInEnglish;
-            updateErrorLanguage();
-        });
-
-        // Kiểm tra giá trị của biến `isErrorOverlayVisibleOnLoad` để hiển thị hoặc ẩn khung lỗi
-        if (isErrorOverlayVisibleOnLoad) {
-            errorOverlay.classList.remove('hidden');
-        } else {
-            errorOverlay.classList.add('hidden');
-        }
-        // --- KẾT THÚC LOGIC KHUNG LỖI ---
-        
-        
         const savedTheme = localStorage.getItem('theme') || 'dark';
         const savedLang = localStorage.getItem('language') || 'vi';
         
@@ -1747,5 +1692,4 @@
 </script>
 
 </body>
-
 </html>
