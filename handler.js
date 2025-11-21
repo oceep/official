@@ -44,8 +44,8 @@ export default async function handler(req) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${config.key}`,
                 // Các header này có thể cần thiết để OpenRouter xác thực
-                'HTTP-Referer': 'https://your-frontend-domain.com', // Thay bằng domain của bạn
-                'X-Title': 'Oceep Chatbot' // Thay bằng tên app của bạn
+                'HTTP-Referer': 'https://official-virid.vercel.app/', // Thay bằng domain của bạn
+                'X-Title': 'Oceep' // Thay bằng tên app của bạn
             },
             body: JSON.stringify({
                 model: config.model,
