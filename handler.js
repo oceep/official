@@ -23,7 +23,7 @@ function corsResponse(body, init = {}) {
     const headers = new Headers(init.headers || {});
     
     // Thêm CORS headers
-    headers.set('Access-Control-Allow-Origin', 'https://official-qq82vl1ny-oceeps-projects.vercel.app/'); // Hoặc chỉ định domain cụ thể
+    headers.set('Access-Control-Allow-Origin', 'https://official-virid.vercel.app/'); // Hoặc chỉ định domain cụ thể
     headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     
