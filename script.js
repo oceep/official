@@ -1059,8 +1059,8 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const systemMessage = { role: 'system', content: systemContent };
     const messagesWithSystemPrompt = [systemMessage, ...messages];
     
-    // ***ĐÂY LÀ DÒNG ĐÃ ĐƯỢC CẬP NHẬT***
-    const API_URL = 'https://official-jo7qo6vbl-oceeps-projects.vercel.app/api/handler';
+    // FIX: Use relative path instead of hardcoded absolute URL
+    const API_URL = '/api/handler';
 
     try {
         const response = await fetch(API_URL, {
