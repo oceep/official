@@ -1059,14 +1059,15 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const systemMessage = { role: 'system', content: systemContent };
     const messagesWithSystemPrompt = [systemMessage, ...messages];
     
-    // Đổi API_URL để gọi đến backend của bạn trên Vercel
-    const API_URL = 'https://official-virid.vercel.app/api/handler';
+    // ***ĐÂY LÀ DÒNG ĐÃ ĐƯỢC CẬP NHẬT***
+    const API_URL = 'https://official-jo7qo6vbl-oceeps-projects.vercel.app/api/handler';
+
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                modelName: modelName, // Gửi tên model để backend biết dùng key nào
+                modelName: modelName,
                 messages: messagesWithSystemPrompt
             }),
             signal
@@ -1083,7 +1084,6 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
             if (done) break;
             const chunk = decoder.decode(value, { stream: true });
             
-            // Phân tích cú pháp các sự kiện từ stream
             const lines = chunk.split('\n');
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
@@ -1119,22 +1119,18 @@ stopButton.addEventListener('click', () => {
     if (abortController) abortController.abort();
 });
 
-// --- NEW HELPER FUNCTION TO TOGGLE INPUT STATE ---
 function setInputActive(isActive) {
     const t = translations[currentLang];
     messageInput.disabled = !isActive;
     
-    // Disable/Enable all buttons in the footer
     const footerButtons = [
         randomPromptBtn, videoBtn, learnBtn, uploadFileBtn, modelButton
     ];
     footerButtons.forEach(btn => btn.disabled = !isActive);
 
     if (isActive) {
-        // When activating, restore the correct placeholder based on token count
         updateTokenUI();
     } else {
-        // When deactivating, show the typing placeholder
         messageInput.placeholder = t.aiTypingPlaceholder;
     }
 }
@@ -1177,7 +1173,7 @@ chatForm.addEventListener('submit', async function(event) {
         ? message
         : userMessageContent;
     conversationHistory.push({ role: 'user', content: historyContent });
-    renderHistoryList(); // Update history immediately
+    renderHistoryList();
 
     messageInput.value = '';
     messageInput.dispatchEvent(new Event('input')); 
@@ -1196,7 +1192,6 @@ chatForm.addEventListener('submit', async function(event) {
     soundWaveButton.classList.add('hidden');
     stopButton.classList.remove('hidden');
     
-    // --- MODIFICATION: Deactivate input form ---
     setInputActive(false);
 
     abortController = new AbortController();
@@ -1221,9 +1216,7 @@ chatForm.addEventListener('submit', async function(event) {
         stopButton.classList.add('hidden');
         soundWaveButton.classList.remove('hidden');
         
-        // --- MODIFICATION: Reactivate input form ---
         setInputActive(true);
-        // updateTokenUI() is called inside setInputActive(true)
     }
 });
 
@@ -1233,7 +1226,6 @@ fileInput.addEventListener('change', (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Clear previous preview and release object URL if it exists
     if (stagedFile && stagedFile.type === 'video') {
         URL.revokeObjectURL(stagedFile.url);
     }
@@ -1271,10 +1263,10 @@ fileInput.addEventListener('change', (event) => {
 function addRemoveButtonListener() {
     document.getElementById('remove-file-btn').addEventListener('click', () => {
         if (stagedFile && stagedFile.type === 'video') {
-             URL.revokeObjectURL(stagedFile.url); // Clean up video object URL
+             URL.revokeObjectURL(stagedFile.url);
         }
         stagedFile = null;
         fileThumbnailContainer.innerHTML = '';
-        fileInput.value = ''; // Reset file input
+        fileInput.value = '';
     });
 }
