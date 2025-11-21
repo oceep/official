@@ -11,6 +11,7 @@ const tokenConfig = {
 };
 //=====================================================================//
 
+// --- DOM ELEMENTS ---
 const themeMenuButton = document.getElementById('theme-menu-button');
 const themeModal = document.getElementById('theme-modal');
 const modalContent = document.getElementById('modal-content');
@@ -51,12 +52,17 @@ const currentTokenInput = document.getElementById('current-token-input');
 const maxTokenInput = document.getElementById('max-token-input');
 const tokenInfinity = document.getElementById('token-infinity');
 
+// --- STATE ---
 let currentLang = 'vi';
 let isTutorMode = localStorage.getItem('isTutorMode') === 'true';
 let currentModel = JSON.parse(localStorage.getItem('currentModel')) || { model: 'Mini', version: '' };
 let abortController;
 let isRandomPromptUsedInSession = false;
+let conversationHistory = [];
+let chatHistories = {};
+let currentChatId = null;
 
+// --- TRANSLATIONS ---
 const translations = {
     vi: {
         sidebarHeader: "Lịch sử Chat", newChatTitle: "Chat mới", messagePlaceholder: "Bạn muốn biết gì?", aiTypingPlaceholder: "AI đang trả lời...", outOfTokensPlaceholder: "Bạn đã hết lượt.", sendButton: "Gửi", stopButton: "Dừng", modelButtonDefault: "Expert", modelButtonPrefix: "Mô Hình", randomButton: "Ngẫu nhiên", videoButton: "Tạo Video", learnButton: "Học Tập", footerText: "AI có thể mắc lỗi. Hãy kiểm tra thông tin quan trọng.", themeModalTitle: "Chọn Giao Diện", languageModalTitle: "Chọn Ngôn Ngữ", themeDark: "Tối", themeLight: "Sáng", themeOcean: "Biển", modalClose: "Đóng", newChatHistory: "Cuộc trò chuyện mới", greetingMorning: "Chào buổi sáng", greetingNoon: "Chào buổi trưa", greetingAfternoon: "Chào buổi chiều", greetingEvening: "Chào buổi tối", errorPrefix: "Đã có lỗi xảy ra", comingSoon: "Sắp có", comingSoonTitle: "Sắp có...", comingSoonText: "Tính năng này đang được phát triển.", langTooltip: "Đổi Ngôn Ngữ", themeTooltip: "Đổi Giao Diện", historyTooltip: "Lịch Sử Chat", newChatTooltip: "Chat Mới", modelMiniDesc: "Nhanh và hiệu quả.", modelSmartDesc: "Cân bằng tốc độ và thông minh.", modelNerdDesc: "Suy luận cao, kết quả chuẩn xác."
@@ -84,10 +90,7 @@ const translations = {
     }
 };
 
-let conversationHistory = [];
-let chatHistories = {};
-let currentChatId = null;
-
+// --- UI TEXT ELEMENTS ---
 const textElements = {
     header: document.getElementById('header-title'),
     main: document.getElementById('main-title'),
@@ -175,6 +178,8 @@ const themeColors = {
         inputColor: ['text-white', 'placeholder-gray-300']
     }
 };
+
+// --- FUNCTIONS ---
 
 function saveStateToLocalStorage() {
     const historiesToSave = { ...chatHistories };
@@ -895,7 +900,7 @@ const systemPrompts = {
 };
 
 // ============================================================
-// VITAL FIX FOR FAILED TO FETCH
+// MAIN FIX FOR CONNECTION AND STREAMING ERRORS
 // ============================================================
 async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const langPrompts = systemPrompts[currentLang] || systemPrompts['en'];
@@ -905,7 +910,8 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     
     const LIVE_DOMAIN = 'https://official-virid.vercel.app';
     const isLocal = window.location.hostname === 'localhost' || 
-                    window.location.hostname === '127.0.0.1';
+                    window.location.hostname === '127.0.0.1' ||
+                    window.location.protocol === 'file:';
 
     const API_URL = isLocal ? `${LIVE_DOMAIN}/api/handler` : '/api/handler';
 
@@ -922,15 +928,21 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
             signal
         });
 
+        // --- ERROR HANDLING FIX ---
         if (!response.ok) {
             let errorMsg = `Server Error (${response.status})`;
             try {
-                const errorData = await response.json();
-                if (errorData.error) errorMsg = errorData.error;
-                if (errorData.details) errorMsg += ` - ${errorData.details}`;
-            } catch (e) {
-                const text = await response.text();
-                if (text) errorMsg = text.substring(0, 200);
+                // Read text ONLY ONCE to avoid "body stream already read"
+                const errorBody = await response.text(); 
+                try {
+                    const errorData = JSON.parse(errorBody);
+                    if (errorData.error) errorMsg = errorData.error;
+                    if (errorData.details) errorMsg += ` - ${errorData.details}`;
+                } catch (parseError) {
+                    if (errorBody) errorMsg = errorBody.substring(0, 200);
+                }
+            } catch (readError) {
+                console.error("Could not read error response", readError);
             }
             throw new Error(errorMsg);
         }
@@ -964,10 +976,19 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
 
     } catch (error) {
         if (error.name === 'AbortError') return aiMessageEl.firstChild.innerText;
-        console.error("Connection Error:", error);
-        let userMsg = error.message === 'Failed to fetch' 
-            ? (isLocal ? "Connection Failed. Check internet & Vercel keys." : "Connection Failed. Check Vercel Logs.") 
-            : `Error: ${error.message}`;
+        
+        console.error("Connection Error Details:", error);
+        
+        let userMsg = "An error occurred.";
+        
+        if (error.message.includes('Failed to fetch')) {
+             userMsg = isLocal 
+                ? "Lỗi kết nối (CORS/Mạng). Hãy đảm bảo Project Vercel đã Redeploy sau khi thêm API Key." 
+                : "Không thể kết nối đến Server. Vui lòng thử lại sau.";
+        } else {
+            userMsg = `Lỗi: ${error.message}`;
+        }
+        
         aiMessageEl.firstChild.innerHTML = `<span class="text-red-400">${userMsg}</span>`;
         throw error;
     }
@@ -1057,12 +1078,8 @@ chatForm.addEventListener('submit', async function(event) {
         chatContainer.scrollTop = chatContainer.scrollHeight;
         saveStateToLocalStorage(); 
     } catch (error) {
-        aiMessageEl.remove();
-        const errorMessage = `${translations[currentLang].errorPrefix}: ${error.message}`;
-        const errorMessageEl = createMessageElement(errorMessage, 'ai');
-        errorMessageEl.firstChild.classList.add('!bg-red-500', 'text-white');
-        chatContainer.appendChild(errorMessageEl);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
+        // Error handled inside streamAIResponse, message already displayed.
+        // Just cleanup UI here.
     } finally {
         aiMessageEl.firstChild.classList.remove('streaming');
         if (window.MathJax) MathJax.typesetPromise([aiMessageEl]);
