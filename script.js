@@ -1059,10 +1059,23 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const systemMessage = { role: 'system', content: systemContent };
     const messagesWithSystemPrompt = [systemMessage, ...messages];
     
-    // FIX: Use relative path instead of hardcoded absolute URL
-    const API_URL = '/api/handler';
+    // =================================================================================
+    // CONFIGURATION:
+    // 1. If on Localhost, use the Live Vercel URL (Cross-Origin).
+    // 2. If on Vercel (any deployment), use the relative path (Same-Origin).
+    // =================================================================================
+    
+    // YOUR LIVE DOMAIN FROM THE SCREENSHOT
+    const LIVE_DOMAIN = 'https://official-virid.vercel.app'; 
+    
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    // If local, use full URL. If deployed, use relative path.
+    const API_URL = isLocal ? `${LIVE_DOMAIN}/api/handler` : '/api/handler';
 
     try {
+        console.log(`Connecting to API at: ${API_URL}`); // Debugging log
+
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1072,18 +1085,30 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
             }),
             signal
         });
+
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Unknown error from API proxy.');
+            // Try to read the error message from the server
+            let errorMsg = `Server Error (${response.status})`;
+            try {
+                const errorData = await response.json();
+                if (errorData.error) errorMsg = errorData.error;
+            } catch (e) {
+                // If JSON parsing fails, use text
+                const text = await response.text();
+                if (text) errorMsg = text.substring(0, 100); // Limit length
+            }
+            throw new Error(errorMsg);
         }
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let fullResponseText = "";
+
         while (true) {
             const { value, done } = await reader.read();
             if (done) break;
             const chunk = decoder.decode(value, { stream: true });
-            
+
             const lines = chunk.split('\n');
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
@@ -1098,18 +1123,30 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
                             chatContainer.scrollTop = chatContainer.scrollHeight;
                         }
                     } catch (e) {
-                        console.error("Error parsing stream chunk:", e, jsonString);
+                        console.error("Error parsing stream chunk:", e);
                     }
                 }
             }
         }
         return fullResponseText;
+
     } catch (error) {
         if (error.name === 'AbortError') {
             console.log('Stream stopped by user.');
             return aiMessageEl.firstChild.innerText;
         }
-        console.error("Error calling API proxy:", error);
+        
+        // Specific help for "Failed to fetch"
+        if (error.message === 'Failed to fetch') {
+            console.error("Network Error Details:", error);
+            if (isLocal) {
+                throw new Error("Could not connect to Vercel. Check CORS settings on Vercel or your internet.");
+            } else {
+                throw new Error("Could not connect to /api/handler. Does the file 'api/handler.js' exist in your Vercel project?");
+            }
+        }
+
+        console.error("Error calling API:", error);
         throw error;
     }
 }
