@@ -3,19 +3,10 @@
 // Dễ dàng điều chỉnh các thông số Năng lượng tại đây.                    //
 //=====================================================================//
 const tokenConfig = {
-    // Chế độ Vô hạn: true = năng lượng vô hạn, false = năng lượng có giới hạn.
     IS_INFINITE: true,
-
-    // Năng lượng Tối đa (chỉ hoạt động khi IS_INFINITE = false).
     MAX_TOKENS: 50,
-
-    // Chi phí mỗi tin nhắn (chỉ hoạt động khi IS_INFINITE = false).
     TOKEN_COST_PER_MESSAGE: 1,
-
-    // Thời gian hồi Năng lượng (tính bằng phút, chỉ hoạt động khi IS_INFINITE = false).
     TOKEN_REGEN_INTERVAL_MINUTES: 5,
-
-    // Lượng Năng lượng được hồi mỗi lần (chỉ hoạt động khi IS_INFINITE = false).
     TOKEN_REGEN_AMOUNT: 1,
 };
 //=====================================================================//
@@ -48,7 +39,6 @@ const randomPromptBtn = document.getElementById('random-prompt-icon-btn');
 const comingSoonModal = document.getElementById('coming-soon-modal');
 const closeComingSoonModal = document.getElementById('close-coming-soon-modal');
 
-
 // File upload elements
 const uploadFileBtn = document.getElementById('upload-file-btn');
 const fileInput = document.getElementById('file-input');
@@ -61,176 +51,36 @@ const currentTokenInput = document.getElementById('current-token-input');
 const maxTokenInput = document.getElementById('max-token-input');
 const tokenInfinity = document.getElementById('token-infinity');
 
-
 let currentLang = 'vi';
-// --- STATE MANAGEMENT: Load persistent state from localStorage on script start ---
 let isTutorMode = localStorage.getItem('isTutorMode') === 'true';
 let currentModel = JSON.parse(localStorage.getItem('currentModel')) || { model: 'Mini', version: '' };
-// ---
 let abortController;
 let isRandomPromptUsedInSession = false;
 
-
 const translations = {
     vi: {
-        sidebarHeader: "Lịch sử Chat",
-        newChatTitle: "Chat mới",
-        messagePlaceholder: "Bạn muốn biết gì?",
-        aiTypingPlaceholder: "AI đang trả lời...",
-        outOfTokensPlaceholder: "Bạn đã hết lượt. Lượt sẽ hồi sau ít phút.",
-        sendButton: "Gửi",
-        stopButton: "Dừng",
-        modelButtonDefault: "Expert",
-        modelButtonPrefix: "Mô Hình",
-        randomButton: "Ngẫu nhiên",
-        videoButton: "Tạo Video",
-        learnButton: "Học Tập",
-        footerText: "AI có thể mắc lỗi. Hãy cân nhắc kiểm tra thông tin quan trọng.",
-        themeModalTitle: "Chọn Giao Diện",
-        languageModalTitle: "Chọn Ngôn Ngữ",
-        themeDark: "Tối",
-        themeLight: "Sáng",
-        themeOcean: "Biển",
-        modalClose: "Đóng",
-        newChatHistory: "Cuộc trò chuyện mới",
-        greetingMorning: "Chào buổi sáng",
-        greetingNoon: "Chào buổi trưa",
-        greetingAfternoon: "Chào buổi chiều",
-        greetingEvening: "Chào buổi tối",
-        errorPrefix: "Đã có lỗi xảy ra",
-        comingSoon: "Sắp có",
-        comingSoonTitle: "Sắp có...",
-        comingSoonText: "Tính năng này đang được phát triển.",
-        langTooltip: "Đổi Ngôn Ngữ",
-        themeTooltip: "Đổi Giao Diện",
-        historyTooltip: "Lịch Sử Chat",
-        newChatTooltip: "Chat Mới",
-        modelMiniDesc: "Nhanh và hiệu quả cho các tác vụ hàng ngày.",
-        modelSmartDesc: "Cân bằng giữa tốc độ và sự thông minh.",
-        modelNerdDesc: "Suy luận cao nhờ mô hình tiên tiến, cho ra kết quả chuẩn xác."
+        sidebarHeader: "Lịch sử Chat", newChatTitle: "Chat mới", messagePlaceholder: "Bạn muốn biết gì?", aiTypingPlaceholder: "AI đang trả lời...", outOfTokensPlaceholder: "Bạn đã hết lượt.", sendButton: "Gửi", stopButton: "Dừng", modelButtonDefault: "Expert", modelButtonPrefix: "Mô Hình", randomButton: "Ngẫu nhiên", videoButton: "Tạo Video", learnButton: "Học Tập", footerText: "AI có thể mắc lỗi. Hãy kiểm tra thông tin quan trọng.", themeModalTitle: "Chọn Giao Diện", languageModalTitle: "Chọn Ngôn Ngữ", themeDark: "Tối", themeLight: "Sáng", themeOcean: "Biển", modalClose: "Đóng", newChatHistory: "Cuộc trò chuyện mới", greetingMorning: "Chào buổi sáng", greetingNoon: "Chào buổi trưa", greetingAfternoon: "Chào buổi chiều", greetingEvening: "Chào buổi tối", errorPrefix: "Đã có lỗi xảy ra", comingSoon: "Sắp có", comingSoonTitle: "Sắp có...", comingSoonText: "Tính năng này đang được phát triển.", langTooltip: "Đổi Ngôn Ngữ", themeTooltip: "Đổi Giao Diện", historyTooltip: "Lịch Sử Chat", newChatTooltip: "Chat Mới", modelMiniDesc: "Nhanh và hiệu quả.", modelSmartDesc: "Cân bằng tốc độ và thông minh.", modelNerdDesc: "Suy luận cao, kết quả chuẩn xác."
     },
     en: {
-        sidebarHeader: "Chat History",
-        newChatTitle: "New Chat",
-        messagePlaceholder: "What do you want to know?",
-        aiTypingPlaceholder: "AI is replying...",
-        outOfTokensPlaceholder: "You're out of tokens. They regenerate over time.",
-        sendButton: "Send",
-        stopButton: "Stop",
-        modelButtonDefault: "Expert",
-        modelButtonPrefix: "Model",
-        randomButton: "Random",
-        videoButton: "Create Video",
-        learnButton: "Study",
-        footerText: "AI can make mistakes. Consider checking important information.",
-        themeModalTitle: "Choose Theme",
-        languageModalTitle: "Select Language",
-        themeDark: "Dark",
-        themeLight: "Light",
-        themeOcean: "Ocean",
-        modalClose: "Close",
-        newChatHistory: "New Conversation",
-        greetingMorning: "Good morning",
-        greetingNoon: "Good afternoon",
-        greetingAfternoon: "Good afternoon",
-        greetingEvening: "Good evening",
-        errorPrefix: "An error occurred",
-        comingSoon: "Coming Soon",
-        comingSoonTitle: "Coming Soon...",
-        comingSoonText: "This feature is under development.",
-        langTooltip: "Switch Language",
-        themeTooltip: "Change Theme",
-        historyTooltip: "Chat History",
-        newChatTooltip: "New Chat",
-        modelMiniDesc: "Fast and efficient for everyday tasks.",
-        modelSmartDesc: "A balance between speed and intelligence.",
-        modelNerdDesc: "The most powerful model for complex answers."
+        sidebarHeader: "Chat History", newChatTitle: "New Chat", messagePlaceholder: "What do you want to know?", aiTypingPlaceholder: "AI is replying...", outOfTokensPlaceholder: "You're out of tokens.", sendButton: "Send", stopButton: "Stop", modelButtonDefault: "Expert", modelButtonPrefix: "Model", randomButton: "Random", videoButton: "Create Video", learnButton: "Study", footerText: "AI can make mistakes. Check important info.", themeModalTitle: "Choose Theme", languageModalTitle: "Select Language", themeDark: "Dark", themeLight: "Light", themeOcean: "Ocean", modalClose: "Close", newChatHistory: "New Conversation", greetingMorning: "Good morning", greetingNoon: "Good afternoon", greetingAfternoon: "Good afternoon", greetingEvening: "Good evening", errorPrefix: "An error occurred", comingSoon: "Coming Soon", comingSoonTitle: "Coming Soon...", comingSoonText: "Under development.", langTooltip: "Switch Language", themeTooltip: "Change Theme", historyTooltip: "Chat History", newChatTooltip: "New Chat", modelMiniDesc: "Fast and efficient.", modelSmartDesc: "Balanced speed and intelligence.", modelNerdDesc: "Powerful model for complex answers."
     },
     zh: {
-        sidebarHeader: "聊天历史", newChatTitle: "新聊天", messagePlaceholder: "你想知道什么？", aiTypingPlaceholder: "AI正在回复...", outOfTokensPlaceholder: "您的代币已用完。它们会随着时间的推移而再生。", sendButton: "发送", stopButton: "停止", modelButtonDefault: "专家", modelButtonPrefix: "模型", randomButton: "随机", videoButton: "创建视频", learnButton: "学习", footerText: "人工智能可能会犯错误。请考虑核查重要信息。", themeModalTitle: "选择主题", languageModalTitle: "选择语言", themeDark: "黑暗", themeLight: "光", themeOcean: "海洋", modalClose: "关闭", newChatHistory: "新对话", greetingMorning: "早上好", greetingNoon: "中午好", greetingAfternoon: "下午好", greetingEvening: "晚上好", errorPrefix: "发生错误", comingSoon: "即将推出", comingSoonTitle: "即将推出...", comingSoonText: "此功能正在开发中。", langTooltip: "切换语言", themeTooltip: "更改主题", historyTooltip: "聊天历史", newChatTooltip: "新聊天", modelMiniDesc: "快速高效地完成日常任务。", modelSmartDesc: "速度与智能的平衡。", modelNerdDesc: "用于复杂答案的最强大模型。"
+        sidebarHeader: "聊天历史", newChatTitle: "新聊天", messagePlaceholder: "你想知道什么？", aiTypingPlaceholder: "AI正在回复...", outOfTokensPlaceholder: "代币已用完。", sendButton: "发送", stopButton: "停止", modelButtonDefault: "专家", modelButtonPrefix: "模型", randomButton: "随机", videoButton: "创建视频", learnButton: "学习", footerText: "AI可能会犯错。", themeModalTitle: "选择主题", languageModalTitle: "选择语言", themeDark: "黑暗", themeLight: "光", themeOcean: "海洋", modalClose: "关闭", newChatHistory: "新对话", greetingMorning: "早上好", greetingNoon: "中午好", greetingAfternoon: "下午好", greetingEvening: "晚上好", errorPrefix: "发生错误", comingSoon: "即将推出", comingSoonTitle: "即将推出...", comingSoonText: "开发中。", langTooltip: "切换语言", themeTooltip: "更改主题", historyTooltip: "聊天历史", newChatTooltip: "新聊天", modelMiniDesc: "快速高效。", modelSmartDesc: "速度与智能的平衡。", modelNerdDesc: "强大的模型。"
     },
     hi: {
-        sidebarHeader: "चैट इतिहास", newChatTitle: "नई चैट", messagePlaceholder: "आप क्या जानना चाहते हैं?", aiTypingPlaceholder: "एआई जवाब दे रहा है...", outOfTokensPlaceholder: "आपके टोकन खत्म हो गए हैं। वे समय के साथ फिर से बन जाते हैं।", sendButton: "भेजें", stopButton: "रुकें", modelButtonDefault: "विशेषज्ञ", modelButtonPrefix: "मॉडल", randomButton: "यादृच्छिक", videoButton: "वीडियो बनाएं", learnButton: "अध्ययन", footerText: "एआई गलतियाँ कर सकता है। महत्वपूर्ण जानकारी की जाँच करने पर विचार करें।", themeModalTitle: "थीम चुनें", languageModalTitle: "भाषा चुनें", themeDark: "अंधेरा", themeLight: "प्रकाश", themeOcean: "सागर", modalClose: "बंद करें", newChatHistory: "नई बातचीत", greetingMorning: "सुप्रभात", greetingNoon: "नमस्ते", greetingAfternoon: "नमस्ते", greetingEvening: "शुभ संध्या", errorPrefix: "एक त्रुटि हुई", comingSoon: "जल्द आ रहा है", comingSoonTitle: "जल्द आ रहा है...", comingSoonText: "यह सुविधा विकास अधीन है।", langTooltip: "भाषा बदलें", themeTooltip: "थीम बदलें", historyTooltip: "चैट इतिहास", newChatTooltip: "नई चैट", modelMiniDesc: "रोजमर्रा के कार्यों के लिए तेज़ और कुशल।", modelSmartDesc: "गति और बुद्धिमत्ता के बीच संतुलन।", modelNerdDesc: "जटिल उत्तरों के लिए सबसे शक्तिशाली मॉडल।"
+        sidebarHeader: "चैट इतिहास", newChatTitle: "नई चैट", messagePlaceholder: "आप क्या जानना चाहते हैं?", aiTypingPlaceholder: "एआई जवाब दे रहा है...", outOfTokensPlaceholder: "टोकन खत्म हो गए हैं।", sendButton: "भेजें", stopButton: "रुकें", modelButtonDefault: "विशेषज्ञ", modelButtonPrefix: "मॉडल", randomButton: "यादृच्छिक", videoButton: "वीडियो बनाएं", learnButton: "अध्ययन", footerText: "एआई गलतियाँ कर सकता है।", themeModalTitle: "थीम चुनें", languageModalTitle: "भाषा चुनें", themeDark: "अंधेरा", themeLight: "प्रकाश", themeOcean: "सागर", modalClose: "बंद करें", newChatHistory: "नई बातचीत", greetingMorning: "सुप्रभात", greetingNoon: "नमस्ते", greetingAfternoon: "नमस्ते", greetingEvening: "शुभ संध्या", errorPrefix: "त्रुटि हुई", comingSoon: "जल्द आ रहा है", comingSoonTitle: "जल्द आ रहा है...", comingSoonText: "विकास अधीन है।", langTooltip: "भाषा बदलें", themeTooltip: "थीम बदलें", historyTooltip: "चैट इतिहास", newChatTooltip: "नई चैट", modelMiniDesc: "तेज़ और कुशल।", modelSmartDesc: "गति और बुद्धिमत्ता का संतुलन।", modelNerdDesc: "शक्तिशाली मॉडल।"
     },
     es: {
-        sidebarHeader: "Historial de chat", newChatTitle: "Nuevo chat", messagePlaceholder: "¿Qué quieres saber?", aiTypingPlaceholder: "La IA está respondiendo...", outOfTokensPlaceholder: "Te has quedado sin tokens. Se regeneran con el tiempo.", sendButton: "Enviar", stopButton: "Detener", modelButtonDefault: "Experto", modelButtonPrefix: "Modelo", randomButton: "Aleatorio", videoButton: "Crear video", learnButton: "Estudiar", footerText: "La IA puede cometer errores. Considere verificar información importante.", themeModalTitle: "Elegir tema", languageModalTitle: "Seleccionar idioma", themeDark: "Oscuro", themeLight: "Luz", themeOcean: "Océano", modalClose: "Cerrar", newChatHistory: "Nueva conversación", greetingMorning: "Buenos días", greetingNoon: "Buenas tardes", greetingAfternoon: "Buenas tardes", greetingEvening: "Buenas noches", errorPrefix: "Ocurrió un error", comingSoon: "Próximamente", comingSoonTitle: "Próximamente...", comingSoonText: "Esta función está en desarrollo.", langTooltip: "Cambiar idioma", themeTooltip: "Cambiar tema", historyTooltip: "Historial de chat", newChatTooltip: "Nuevo chat", modelMiniDesc: "Rápido y eficiente para las tareas diarias.", modelSmartDesc: "Un equilibrio entre velocidad e inteligencia.", modelNerdDesc: "El modelo más potente para respuestas complejas."
+        sidebarHeader: "Historial", newChatTitle: "Nuevo chat", messagePlaceholder: "¿Qué quieres saber?", aiTypingPlaceholder: "IA respondiendo...", outOfTokensPlaceholder: "Sin tokens.", sendButton: "Enviar", stopButton: "Detener", modelButtonDefault: "Experto", modelButtonPrefix: "Modelo", randomButton: "Aleatorio", videoButton: "Crear video", learnButton: "Estudiar", footerText: "La IA puede cometer errores.", themeModalTitle: "Elegir tema", languageModalTitle: "Idioma", themeDark: "Oscuro", themeLight: "Luz", themeOcean: "Océano", modalClose: "Cerrar", newChatHistory: "Nueva conversación", greetingMorning: "Buenos días", greetingNoon: "Buenas tardes", greetingAfternoon: "Buenas tardes", greetingEvening: "Buenas noches", errorPrefix: "Error", comingSoon: "Próximamente", comingSoonTitle: "Próximamente...", comingSoonText: "En desarrollo.", langTooltip: "Idioma", themeTooltip: "Tema", historyTooltip: "Historial", newChatTooltip: "Nuevo", modelMiniDesc: "Rápido y eficiente.", modelSmartDesc: "Equilibrio velocidad/inteligencia.", modelNerdDesc: "Modelo potente."
     },
     fr: {
-        sidebarHeader: "Historique des discussions", newChatTitle: "Nouvelle discussion", messagePlaceholder: "Que voulez-vous savoir ?", aiTypingPlaceholder: "L'IA répond...", outOfTokensPlaceholder: "Vous n'avez plus de jetons. Ils se régénèrent avec le temps.", sendButton: "Envoyer", stopButton: "Arrêter", modelButtonDefault: "Expert", modelButtonPrefix: "Modèle", randomButton: "Aléatoire", videoButton: "Créer une vidéo", learnButton: "Étudier", footerText: "L'IA peut faire des erreurs. Pensez à vérifier les informations importantes.", themeModalTitle: "Choisir un thème", languageModalTitle: "Sélectionner la langue", themeDark: "Sombre", themeLight: "Lumière", themeOcean: "Océan", modalClose: "Fermer", newChatHistory: "Nouvelle conversation", greetingMorning: "Bonjour", greetingNoon: "Bon après-midi", greetingAfternoon: "Bon après-midi", greetingEvening: "Bonsoir", errorPrefix: "Une erreur est survenue", comingSoon: "Bientôt disponible", comingSoonTitle: "Bientôt disponible...", comingSoonText: "Cette fonctionnalité est en cours de développement.", langTooltip: "Changer de langue", themeTooltip: "Changer de thème", historyTooltip: "Historique des discussions", newChatTooltip: "Nouvelle discussion", modelMiniDesc: "Rapide et efficace pour les tâches quotidiennes.", modelSmartDesc: "Un équilibre entre vitesse et intelligence.", modelNerdDesc: "Le modèle le plus puissant pour les réponses complexes."
+        sidebarHeader: "Historique", newChatTitle: "Nouveau chat", messagePlaceholder: "Que voulez-vous savoir ?", aiTypingPlaceholder: "L'IA répond...", outOfTokensPlaceholder: "Plus de jetons.", sendButton: "Envoyer", stopButton: "Arrêter", modelButtonDefault: "Expert", modelButtonPrefix: "Modèle", randomButton: "Aléatoire", videoButton: "Vidéo", learnButton: "Étudier", footerText: "L'IA peut faire des erreurs.", themeModalTitle: "Thème", languageModalTitle: "Langue", themeDark: "Sombre", themeLight: "Lumière", themeOcean: "Océan", modalClose: "Fermer", newChatHistory: "Nouvelle conversation", greetingMorning: "Bonjour", greetingNoon: "Bon après-midi", greetingAfternoon: "Bon après-midi", greetingEvening: "Bonsoir", errorPrefix: "Erreur", comingSoon: "Bientôt", comingSoonTitle: "Bientôt...", comingSoonText: "En développement.", langTooltip: "Langue", themeTooltip: "Thème", historyTooltip: "Historique", newChatTooltip: "Nouveau", modelMiniDesc: "Rapide et efficace.", modelSmartDesc: "Équilibre vitesse/intelligence.", modelNerdDesc: "Modèle puissant."
     },
     ja: {
-        sidebarHeader: "チャット履歴",
-        newChatTitle: "新しいチャット",
-        messagePlaceholder: "何を知りたいですか？",
-        aiTypingPlaceholder: "AIが返信中です...",
-        outOfTokensPlaceholder: "トークンがなくなりました。時間とともに回復します。",
-        sendButton: "送信",
-        stopButton: "停止",
-        modelButtonDefault: "エキスパート",
-        modelButtonPrefix: "モデル",
-        randomButton: "ランダム",
-        videoButton: "ビデオを作成",
-        learnButton: "勉強",
-        footerText: "AIは間違いを犯す可能性があります。重要な情報を確認することを検討してください。",
-        themeModalTitle: "テーマを選択",
-        languageModalTitle: "言語を選択",
-        themeDark: "ダーク",
-        themeLight: "ライト",
-        themeOcean: "海",
-        modalClose: "閉じる",
-        newChatHistory: "新しい会話",
-        greetingMorning: "おはようございます",
-        greetingNoon: "こんにちは",
-        greetingAfternoon: "こんにちは",
-        greetingEvening: "こんばんは",
-        errorPrefix: "エラーが発生しました",
-        comingSoon: "近日公開",
-        comingSoonTitle: "近日公開...",
-        comingSoonText: "この機能は開発中です。",
-        langTooltip: "言語を切り替え",
-        themeTooltip: "テーマを変更",
-        historyTooltip: "チャット履歴",
-        newChatTooltip: "新しいチャット",
-        modelMiniDesc: "日常のタスクに迅速かつ効率的。",
-        modelSmartDesc: "速度と知能のバランス。",
-        modelNerdDesc: "複雑な回答のための最も強力なモデル。"
+        sidebarHeader: "履歴", newChatTitle: "新しいチャット", messagePlaceholder: "何を知りたいですか？", aiTypingPlaceholder: "AIが返信中...", outOfTokensPlaceholder: "トークン切れ。", sendButton: "送信", stopButton: "停止", modelButtonDefault: "エキスパート", modelButtonPrefix: "モデル", randomButton: "ランダム", videoButton: "ビデオ作成", learnButton: "学習", footerText: "AIは間違うことがあります。", themeModalTitle: "テーマ", languageModalTitle: "言語", themeDark: "ダーク", themeLight: "ライト", themeOcean: "海", modalClose: "閉じる", newChatHistory: "新しい会話", greetingMorning: "おはよう", greetingNoon: "こんにちは", greetingAfternoon: "こんにちは", greetingEvening: "こんばんは", errorPrefix: "エラー", comingSoon: "近日公開", comingSoonTitle: "近日公開...", comingSoonText: "開発中。", langTooltip: "言語", themeTooltip: "テーマ", historyTooltip: "履歴", newChatTooltip: "新規", modelMiniDesc: "高速で効率的。", modelSmartDesc: "速度と知能のバランス。", modelNerdDesc: "強力なモデル。"
     },
     it: {
-        sidebarHeader: "Cronologia Chat",
-        newChatTitle: "Nuova Chat",
-        messagePlaceholder: "Cosa vuoi sapere?",
-        aiTypingPlaceholder: "L'IA sta rispondendo...",
-        outOfTokensPlaceholder: "Hai esaurito i token. Si rigenerano nel tempo.",
-        sendButton: "Invia",
-        stopButton: "Ferma",
-        modelButtonDefault: "Esperto",
-        modelButtonPrefix: "Modello",
-        randomButton: "Casuale",
-        videoButton: "Crea Video",
-        learnButton: "Studia",
-        footerText: "L'IA può commettere errori. Considera di verificare le informazioni importanti.",
-        themeModalTitle: "Scegli Tema",
-        languageModalTitle: "Seleziona Lingua",
-        themeDark: "Scuro",
-        themeLight: "Chiaro",
-        themeOcean: "Oceano",
-        modalClose: "Chiudi",
-        newChatHistory: "Nuova Conversazione",
-        greetingMorning: "Buongiorno",
-        greetingNoon: "Buon pomeriggio",
-        greetingAfternoon: "Buon pomeriggio",
-        greetingEvening: "Buonasera",
-        errorPrefix: "Si è verificato un errore",
-        comingSoon: "Prossimamente",
-        comingSoonTitle: "Prossimamente...",
-        comingSoonText: "Questa funzionalità è in fase di sviluppo.",
-        langTooltip: "Cambia Lingua",
-        themeTooltip: "Cambia Tema",
-        historyTooltip: "Cronologia Chat",
-        newChatTooltip: "Nuova Chat",
-        modelMiniDesc: "Veloce ed efficiente per le attività quotidiane.",
-        modelSmartDesc: "Un equilibrio tra velocità e intelligenza.",
-        modelNerdDesc: "Il modello più potente per risposte complesse."
+        sidebarHeader: "Cronologia", newChatTitle: "Nuova Chat", messagePlaceholder: "Cosa vuoi sapere?", aiTypingPlaceholder: "L'IA risponde...", outOfTokensPlaceholder: "Token esauriti.", sendButton: "Invia", stopButton: "Stop", modelButtonDefault: "Esperto", modelButtonPrefix: "Modello", randomButton: "Casuale", videoButton: "Crea Video", learnButton: "Studia", footerText: "L'IA può sbagliare.", themeModalTitle: "Tema", languageModalTitle: "Lingua", themeDark: "Scuro", themeLight: "Chiaro", themeOcean: "Oceano", modalClose: "Chiudi", newChatHistory: "Nuova Conversazione", greetingMorning: "Buongiorno", greetingNoon: "Buon pomeriggio", greetingAfternoon: "Buon pomeriggio", greetingEvening: "Buonasera", errorPrefix: "Errore", comingSoon: "Prossimamente", comingSoonTitle: "Prossimamente...", comingSoonText: "In sviluppo.", langTooltip: "Lingua", themeTooltip: "Tema", historyTooltip: "Cronologia", newChatTooltip: "Nuova", modelMiniDesc: "Veloce ed efficiente.", modelSmartDesc: "Equilibrio velocità/intelligenza.", modelNerdDesc: "Modello potente."
     }
 };
 
@@ -574,7 +424,6 @@ function updateRandomButtonVisibility() {
     }
 }
 
-
 function renderHistoryList() {
     historyList.innerHTML = '';
     const currentTheme = localStorage.getItem('theme') || 'dark';
@@ -701,18 +550,13 @@ document.addEventListener('DOMContentLoaded', () => {
          document.getElementById('main-title').classList.add('animate-fade-up');
     }
 
-    // --- NEW: Event Listeners for shortcuts and auto-focus ---
     document.addEventListener('keydown', (e) => {
-        // Shortcut Ctrl + G for new chat
         if (e.ctrlKey && e.key.toLowerCase() === 'g') {
             e.preventDefault();
             startNewChat();
         }
-
-        // Auto-focus input field when user starts typing anywhere
         const activeEl = document.activeElement;
         const isTypingInInput = activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA';
-        // Check if the key is a single printable character and not part of a shortcut
         if (!isTypingInInput && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
             messageInput.focus();
         }
@@ -723,7 +567,7 @@ function handleUpdateLog() {
     const updateLogModal = document.getElementById('update-log-modal');
     const closeUpdateLogBtn = document.getElementById('close-update-log');
     const dontShowAgainCheckbox = document.getElementById('dont-show-again');
-    const updateLogVersion = '1.0.2'; // Updated version for new languages
+    const updateLogVersion = '1.0.2';
     const hasSeenUpdate = localStorage.getItem('seenUpdateLogVersion');
 
     if (hasSeenUpdate !== updateLogVersion) showModal(updateLogModal, true);
@@ -744,20 +588,17 @@ function initTokenSystem() {
         updateTokenUI();
         return;
     }
-
     let maxTokens = localStorage.getItem('maxTokens');
     if (maxTokens === null) {
         maxTokens = tokenConfig.MAX_TOKENS;
         localStorage.setItem('maxTokens', maxTokens);
     }
-
     let userTokens = localStorage.getItem('userTokens');
     if (userTokens === null) {
         userTokens = maxTokens;
         localStorage.setItem('userTokens', userTokens);
         localStorage.setItem('lastTokenRegenTimestamp', Date.now());
     }
-
     currentTokenInput.addEventListener('change', handleTokenInputChange);
     maxTokenInput.addEventListener('change', handleTokenInputChange);
     regenerateTokens();
@@ -1053,29 +894,24 @@ const systemPrompts = {
     }
 };
 
+// ============================================================
+// VITAL FIX FOR FAILED TO FETCH
+// ============================================================
 async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const langPrompts = systemPrompts[currentLang] || systemPrompts['en'];
     const systemContent = isTutorMode ? langPrompts.tutor : langPrompts.assistant;
     const systemMessage = { role: 'system', content: systemContent };
     const messagesWithSystemPrompt = [systemMessage, ...messages];
     
-    // =================================================================================
-    // CONFIGURATION:
-    // 1. If on Localhost, use the Live Vercel URL (Cross-Origin).
-    // 2. If on Vercel (any deployment), use the relative path (Same-Origin).
-    // =================================================================================
-    
-    // YOUR LIVE DOMAIN FROM THE SCREENSHOT
-    const LIVE_DOMAIN = 'https://official-virid.vercel.app'; 
-    
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    
-    // If local, use full URL. If deployed, use relative path.
+    const LIVE_DOMAIN = 'https://official-virid.vercel.app';
+    const isLocal = window.location.hostname === 'localhost' || 
+                    window.location.hostname === '127.0.0.1';
+
     const API_URL = isLocal ? `${LIVE_DOMAIN}/api/handler` : '/api/handler';
 
-    try {
-        console.log(`Connecting to API at: ${API_URL}`); // Debugging log
+    console.log(`[System] Requesting: ${modelName} via ${API_URL}`);
 
+    try {
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1087,15 +923,14 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
         });
 
         if (!response.ok) {
-            // Try to read the error message from the server
             let errorMsg = `Server Error (${response.status})`;
             try {
                 const errorData = await response.json();
                 if (errorData.error) errorMsg = errorData.error;
+                if (errorData.details) errorMsg += ` - ${errorData.details}`;
             } catch (e) {
-                // If JSON parsing fails, use text
                 const text = await response.text();
-                if (text) errorMsg = text.substring(0, 100); // Limit length
+                if (text) errorMsg = text.substring(0, 200);
             }
             throw new Error(errorMsg);
         }
@@ -1108,7 +943,6 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
             const { value, done } = await reader.read();
             if (done) break;
             const chunk = decoder.decode(value, { stream: true });
-
             const lines = chunk.split('\n');
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
@@ -1116,41 +950,28 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
                     if (jsonString === '[DONE]') break;
                     try {
                         const data = JSON.parse(jsonString);
-                        const content = data.choices[0].delta.content;
+                        const content = data.choices?.[0]?.delta?.content || "";
                         if (content) {
                             fullResponseText += content;
                             aiMessageEl.firstChild.innerHTML = formatAIResponse(fullResponseText);
                             chatContainer.scrollTop = chatContainer.scrollHeight;
                         }
-                    } catch (e) {
-                        console.error("Error parsing stream chunk:", e);
-                    }
+                    } catch (e) { }
                 }
             }
         }
         return fullResponseText;
 
     } catch (error) {
-        if (error.name === 'AbortError') {
-            console.log('Stream stopped by user.');
-            return aiMessageEl.firstChild.innerText;
-        }
-        
-        // Specific help for "Failed to fetch"
-        if (error.message === 'Failed to fetch') {
-            console.error("Network Error Details:", error);
-            if (isLocal) {
-                throw new Error("Could not connect to Vercel. Check CORS settings on Vercel or your internet.");
-            } else {
-                throw new Error("Could not connect to /api/handler. Does the file 'api/handler.js' exist in your Vercel project?");
-            }
-        }
-
-        console.error("Error calling API:", error);
+        if (error.name === 'AbortError') return aiMessageEl.firstChild.innerText;
+        console.error("Connection Error:", error);
+        let userMsg = error.message === 'Failed to fetch' 
+            ? (isLocal ? "Connection Failed. Check internet & Vercel keys." : "Connection Failed. Check Vercel Logs.") 
+            : `Error: ${error.message}`;
+        aiMessageEl.firstChild.innerHTML = `<span class="text-red-400">${userMsg}</span>`;
         throw error;
     }
 }
-
 
 stopButton.addEventListener('click', () => {
     if (abortController) abortController.abort();
@@ -1159,12 +980,10 @@ stopButton.addEventListener('click', () => {
 function setInputActive(isActive) {
     const t = translations[currentLang];
     messageInput.disabled = !isActive;
-    
     const footerButtons = [
         randomPromptBtn, videoBtn, learnBtn, uploadFileBtn, modelButton
     ];
     footerButtons.forEach(btn => btn.disabled = !isActive);
-
     if (isActive) {
         updateTokenUI();
     } else {
@@ -1172,14 +991,12 @@ function setInputActive(isActive) {
     }
 }
 
-
 chatForm.addEventListener('submit', async function(event) {
     event.preventDefault();
     const message = messageInput.value.trim();
     if (!message && !stagedFile) return;
 
     if (!consumeToken()) {
-        console.log("No tokens left to send message.");
         return;
     }
 
