@@ -1060,8 +1060,7 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const messagesWithSystemPrompt = [systemMessage, ...messages];
     
     // Đổi API_URL để gọi đến backend của bạn trên Vercel
-    const API_URL = '/api/handler';
-
+    const API_URL = 'https://official-virid.vercel.app/api/handler';
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
