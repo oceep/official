@@ -1,6 +1,5 @@
 //=====================================================================//
-// NEW: ENERGY CONFIGURATION BOX                                       //
-// Dễ dàng điều chỉnh các thông số Năng lượng tại đây.                    //
+// CONFIGURATION
 //=====================================================================//
 const tokenConfig = {
     IS_INFINITE: true,
@@ -9,7 +8,6 @@ const tokenConfig = {
     TOKEN_REGEN_INTERVAL_MINUTES: 5,
     TOKEN_REGEN_AMOUNT: 1,
 };
-//=====================================================================//
 
 // --- DOM ELEMENTS ---
 const themeMenuButton = document.getElementById('theme-menu-button');
@@ -40,19 +38,16 @@ const randomPromptBtn = document.getElementById('random-prompt-icon-btn');
 const comingSoonModal = document.getElementById('coming-soon-modal');
 const closeComingSoonModal = document.getElementById('close-coming-soon-modal');
 
-// File upload elements
 const uploadFileBtn = document.getElementById('upload-file-btn');
 const fileInput = document.getElementById('file-input');
 const fileThumbnailContainer = document.getElementById('file-thumbnail-container');
 let stagedFile = null;
 
-// Token management elements
 const tokenInputsContainer = document.getElementById('token-inputs-container');
 const currentTokenInput = document.getElementById('current-token-input');
 const maxTokenInput = document.getElementById('max-token-input');
 const tokenInfinity = document.getElementById('token-infinity');
 
-// --- STATE ---
 let currentLang = 'vi';
 let isTutorMode = localStorage.getItem('isTutorMode') === 'true';
 let currentModel = JSON.parse(localStorage.getItem('currentModel')) || { model: 'Mini', version: '' };
@@ -62,7 +57,6 @@ let conversationHistory = [];
 let chatHistories = {};
 let currentChatId = null;
 
-// --- TRANSLATIONS ---
 const translations = {
     vi: {
         sidebarHeader: "Lịch sử Chat", newChatTitle: "Chat mới", messagePlaceholder: "Bạn muốn biết gì?", aiTypingPlaceholder: "AI đang trả lời...", outOfTokensPlaceholder: "Bạn đã hết lượt.", sendButton: "Gửi", stopButton: "Dừng", modelButtonDefault: "Expert", modelButtonPrefix: "Mô Hình", randomButton: "Ngẫu nhiên", videoButton: "Tạo Video", learnButton: "Học Tập", footerText: "AI có thể mắc lỗi. Hãy kiểm tra thông tin quan trọng.", themeModalTitle: "Chọn Giao Diện", languageModalTitle: "Chọn Ngôn Ngữ", themeDark: "Tối", themeLight: "Sáng", themeOcean: "Biển", modalClose: "Đóng", newChatHistory: "Cuộc trò chuyện mới", greetingMorning: "Chào buổi sáng", greetingNoon: "Chào buổi trưa", greetingAfternoon: "Chào buổi chiều", greetingEvening: "Chào buổi tối", errorPrefix: "Đã có lỗi xảy ra", comingSoon: "Sắp có", comingSoonTitle: "Sắp có...", comingSoonText: "Tính năng này đang được phát triển.", langTooltip: "Đổi Ngôn Ngữ", themeTooltip: "Đổi Giao Diện", historyTooltip: "Lịch Sử Chat", newChatTooltip: "Chat Mới", modelMiniDesc: "Nhanh và hiệu quả.", modelSmartDesc: "Cân bằng tốc độ và thông minh.", modelNerdDesc: "Suy luận cao, kết quả chuẩn xác."
@@ -90,7 +84,6 @@ const translations = {
     }
 };
 
-// --- UI TEXT ELEMENTS ---
 const textElements = {
     header: document.getElementById('header-title'),
     main: document.getElementById('main-title'),
@@ -119,85 +112,24 @@ const textElements = {
     newChatTooltip: document.getElementById('new-chat-tooltip'),
 };
 
+// ... (Theme colors and basic functions stay the same) ...
 const themeColors = {
-    dark: {
-        bg: ['bg-gradient-to-br', 'from-[#212935]', 'to-black'],
-        text: 'text-gray-100',
-        subtleText: 'text-gray-400',
-        logo: 'text-gray-100',
-        iconColor: 'text-gray-300',
-        popup: ['bg-gray-900', 'border', 'border-gray-700'],
-        popupButton: ['text-gray-300', 'hover:bg-white/10', 'hover:text-white'],
-        popupSelected: ['bg-sky-500/20', '!text-sky-300', 'font-semibold'],
-        sidebar: ['bg-black/10', 'border-white/10'],
-        sidebarText: 'text-gray-200',
-        historyActive: ['bg-blue-800/50'],
-        historyHover: ['hover:bg-blue-800/30'],
-        form: ['bg-black/30', 'border-white/20'],
-        headerPill: [],
-        aiMessage: ['text-gray-100'],
-        userMessage: ['bg-blue-600', 'text-white'],
-        inputColor: ['text-gray-200', 'placeholder-gray-500']
-    },
-    light: {
-        bg: ['bg-white'],
-        text: 'text-black',
-        subtleText: 'text-gray-600',
-        logo: 'text-blue-500',
-        iconColor: 'text-gray-800',
-        popup: ['bg-white', 'border', 'border-gray-200', 'shadow-lg'],
-        popupButton: ['text-gray-700', 'hover:bg-gray-100'],
-        popupSelected: ['bg-blue-100', '!text-blue-600', 'font-semibold'],
-        sidebar: ['bg-gray-50', 'border-r', 'border-gray-200'],
-        sidebarText: 'text-black',
-        historyActive: ['bg-blue-100'],
-        historyHover: ['hover:bg-gray-200'],
-        form: ['bg-gray-100', 'border', 'border-gray-300', 'shadow'],
-        headerPill: [],
-        aiMessage: ['text-black'],
-        userMessage: ['bg-blue-500', 'text-white'],
-        inputColor: ['text-black', 'placeholder-gray-400']
-    },
-    ocean: {
-        bgImage: `url('${oceanImageUrl}')`,
-        text: 'text-white',
-        subtleText: 'text-gray-300',
-        logo: 'text-white',
-        iconColor: 'text-white',
-        popup: ['bg-black/70', 'backdrop-blur-md', 'border', 'border-white/10'],
-        popupButton: ['text-gray-300', 'hover:bg-white/10', 'hover:text-white'],
-        popupSelected: ['bg-sky-400/20', '!text-sky-300', 'font-semibold'],
-        sidebar: ['bg-black/10', 'border-white/10'],
-        sidebarText: 'text-white',
-        historyActive: ['bg-white/20'],
-        historyHover: ['hover:bg-white/10'],
-        form: ['bg-black/30', 'border-white/20'],
-        headerPill: ['bg-black/30', 'backdrop-blur-lg', 'border', 'border-white/20'],
-        aiMessage: ['text-white'],
-        userMessage: ['bg-blue-500', 'text-white'],
-        inputColor: ['text-white', 'placeholder-gray-300']
-    }
+    dark: { bg: ['bg-gradient-to-br', 'from-[#212935]', 'to-black'], text: 'text-gray-100', subtleText: 'text-gray-400', logo: 'text-gray-100', iconColor: 'text-gray-300', popup: ['bg-gray-900', 'border', 'border-gray-700'], popupButton: ['text-gray-300', 'hover:bg-white/10', 'hover:text-white'], popupSelected: ['bg-sky-500/20', '!text-sky-300', 'font-semibold'], sidebar: ['bg-black/10', 'border-white/10'], sidebarText: 'text-gray-200', historyActive: ['bg-blue-800/50'], historyHover: ['hover:bg-blue-800/30'], form: ['bg-black/30', 'border-white/20'], headerPill: [], aiMessage: ['text-gray-100'], userMessage: ['bg-blue-600', 'text-white'], inputColor: ['text-gray-200', 'placeholder-gray-500'] },
+    light: { bg: ['bg-white'], text: 'text-black', subtleText: 'text-gray-600', logo: 'text-blue-500', iconColor: 'text-gray-800', popup: ['bg-white', 'border', 'border-gray-200', 'shadow-lg'], popupButton: ['text-gray-700', 'hover:bg-gray-100'], popupSelected: ['bg-blue-100', '!text-blue-600', 'font-semibold'], sidebar: ['bg-gray-50', 'border-r', 'border-gray-200'], sidebarText: 'text-black', historyActive: ['bg-blue-100'], historyHover: ['hover:bg-gray-200'], form: ['bg-gray-100', 'border', 'border-gray-300', 'shadow'], headerPill: [], aiMessage: ['text-black'], userMessage: ['bg-blue-500', 'text-white'], inputColor: ['text-black', 'placeholder-gray-400'] },
+    ocean: { bgImage: `url('${oceanImageUrl}')`, text: 'text-white', subtleText: 'text-gray-300', logo: 'text-white', iconColor: 'text-white', popup: ['bg-black/70', 'backdrop-blur-md', 'border', 'border-white/10'], popupButton: ['text-gray-300', 'hover:bg-white/10', 'hover:text-white'], popupSelected: ['bg-sky-400/20', '!text-sky-300', 'font-semibold'], sidebar: ['bg-black/10', 'border-white/10'], sidebarText: 'text-white', historyActive: ['bg-white/20'], historyHover: ['hover:bg-white/10'], form: ['bg-black/30', 'border-white/20'], headerPill: ['bg-black/30', 'backdrop-blur-lg', 'border', 'border-white/20'], aiMessage: ['text-white'], userMessage: ['bg-blue-500', 'text-white'], inputColor: ['text-white', 'placeholder-gray-300'] }
 };
-
-// --- FUNCTIONS ---
 
 function saveStateToLocalStorage() {
     const historiesToSave = { ...chatHistories };
-    if (historiesToSave[currentChatId] && historiesToSave[currentChatId].length === 0) {
-        delete historiesToSave[currentChatId];
-    }
+    if (historiesToSave[currentChatId] && historiesToSave[currentChatId].length === 0) delete historiesToSave[currentChatId];
     localStorage.setItem('chatHistories', JSON.stringify(historiesToSave));
     localStorage.setItem('currentChatId', currentChatId);
 }
 
 function initializeApp() {
     const savedHistories = localStorage.getItem('chatHistories');
-    if (savedHistories) {
-        chatHistories = JSON.parse(savedHistories);
-    } else {
-        chatHistories = {};
-    }
-    startNewChat(); 
+    chatHistories = savedHistories ? JSON.parse(savedHistories) : {};
+    startNewChat();
 }
 
 function applyTheme(theme) {
@@ -209,9 +141,7 @@ function applyTheme(theme) {
 
     themeOptionButtons.forEach(btn => {
         btn.classList.remove('bg-blue-500/20');
-        if (btn.dataset.theme === theme) {
-             btn.classList.add('bg-blue-500/20');
-        }
+        if (btn.dataset.theme === theme) btn.classList.add('bg-blue-500/20');
     });
 
     body.classList.remove(...allConfigs.flatMap(c => c.bg).flat());
@@ -225,71 +155,52 @@ function applyTheme(theme) {
     
     body.classList.remove(...allConfigs.map(c => c.text));
     body.classList.add(config.text);
-
-    const allLogoColors = allConfigs.map(c => c.logo);
-    textElements.logoText.classList.remove(...allLogoColors);
+    textElements.logoText.classList.remove(...allConfigs.map(c => c.logo));
     textElements.logoText.classList.add(config.logo);
 
     const sidebarEl = document.getElementById('sidebar');
     const formEl = document.getElementById('chat-form');
     const pillEls = document.querySelectorAll('.header-pill-container');
-    const allPillClasses = allConfigs.flatMap(c => c.headerPill || []).flat();
     sidebarEl.classList.remove(...allConfigs.flatMap(c => c.sidebar || []).flat());
     sidebarEl.classList.add(...(config.sidebar || []));
     formEl.classList.remove(...allConfigs.flatMap(c => c.form || []).flat());
     formEl.classList.add(...(config.form || []));
     pillEls.forEach(pill => {
-        pill.classList.remove(...allPillClasses);
+        pill.classList.remove(...allConfigs.flatMap(c => c.headerPill || []).flat());
         pill.classList.add(...(config.headerPill || []));
     });
 
-    const themeableIconEls = [
-        sidebarToggle.querySelector('svg'), newChatHeaderBtn.querySelector('svg'),
-        langSwitchBtn, document.getElementById('theme-icon'),
-        document.querySelector('#random-prompt-icon-btn svg'), 
-        document.querySelector('#video-icon-btn svg'), 
-        document.querySelector('#learn-icon-btn svg'), 
-        document.querySelector('#upload-file-btn svg')
-    ];
-    const allIconColors = allConfigs.map(c => c.iconColor);
+    const themeableIconEls = [sidebarToggle.querySelector('svg'), newChatHeaderBtn.querySelector('svg'), langSwitchBtn, document.getElementById('theme-icon'), document.querySelector('#random-prompt-icon-btn svg'), document.querySelector('#video-icon-btn svg'), document.querySelector('#learn-icon-btn svg'), document.querySelector('#upload-file-btn svg')];
     themeableIconEls.forEach(el => {
         if (el) {
-            el.classList.remove(...allIconColors);
+            el.classList.remove(...allConfigs.map(c => c.iconColor));
             el.classList.add(config.iconColor);
         }
     });
     
     const messageInputEl = document.getElementById('message-input');
-    const allInputColors = allConfigs.flatMap(c => c.inputColor || []).flat();
-    messageInputEl.classList.remove(...allInputColors);
+    messageInputEl.classList.remove(...allConfigs.flatMap(c => c.inputColor || []).flat());
     messageInputEl.classList.add(...(config.inputColor || []));
 
     textElements.footer.classList.remove(...allConfigs.map(c => c.subtleText));
     textElements.footer.classList.add(config.subtleText);
-    const tokenDisplayIcon = document.querySelector('#token-display svg');
-    tokenDisplayIcon.classList.remove(...allConfigs.map(c => c.iconColor));
-    tokenDisplayIcon.classList.add(config.iconColor);
+    document.querySelector('#token-display svg').classList.remove(...allConfigs.map(c => c.iconColor));
+    document.querySelector('#token-display svg').classList.add(config.iconColor);
 
     const modelPopup = document.getElementById('model-popup');
     modelPopup.classList.remove(...allConfigs.flatMap(c => c.popup).flat());
     modelPopup.classList.add(...config.popup);
 
-    const chatContainer = document.getElementById('chat-container');
-    if (chatContainer) {
-        const aiMessages = chatContainer.querySelectorAll('.ai-message-wrapper');
-        const allAiMessageClasses = allConfigs.flatMap(c => c.aiMessage || []).flat();
-        aiMessages.forEach(msg => {
-            msg.classList.remove(...allAiMessageClasses);
+    if (document.getElementById('chat-container')) {
+        document.querySelectorAll('.ai-message-wrapper').forEach(msg => {
+            msg.classList.remove(...allConfigs.flatMap(c => c.aiMessage || []).flat());
             msg.classList.add(...config.aiMessage);
         });
-        const userMessages = chatContainer.querySelectorAll('.user-message-wrapper');
-        const allUserMessageClasses = allConfigs.flatMap(c => c.userMessage || []).flat();
-        userMessages.forEach(msg => {
-            msg.classList.remove(...allUserMessageClasses);
+        document.querySelectorAll('.user-message-wrapper').forEach(msg => {
+            msg.classList.remove(...allConfigs.flatMap(c => c.userMessage || []).flat());
             msg.classList.add(...config.userMessage);
         });
     }
-
     localStorage.setItem('theme', theme);
     renderHistoryList();
     updateLearnButtonVisualState();
@@ -298,16 +209,13 @@ function applyTheme(theme) {
 function updateActiveLanguageButton(lang) {
     languageOptionButtons.forEach(btn => {
         btn.classList.remove('bg-blue-500/20', 'text-blue-600');
-        if (btn.dataset.lang === lang) {
-            btn.classList.add('bg-blue-500/20', 'text-blue-600');
-        }
+        if (btn.dataset.lang === lang) btn.classList.add('bg-blue-500/20', 'text-blue-600');
     });
 }
 
 function switchLanguage(lang) {
     currentLang = lang;
     const t = translations[lang];
-
     textElements.sidebarHeader.textContent = t.sidebarHeader;
     textElements.input.placeholder = t.messagePlaceholder;
     textElements.footer.textContent = t.footerText;
@@ -328,12 +236,9 @@ function switchLanguage(lang) {
     textElements.themeTooltip.textContent = t.themeTooltip;
     textElements.historyTooltip.textContent = t.historyTooltip;
     textElements.newChatTooltip.textContent = t.newChatTooltip;
-
     langSwitchBtn.textContent = lang.toUpperCase();
-
     document.documentElement.lang = lang;
     localStorage.setItem('language', lang);
-    
     updateActiveLanguageButton(lang);
     updateModelButtonText();
     setGreeting();
@@ -342,8 +247,6 @@ function switchLanguage(lang) {
 }
 
 let isModalAnimating = false;
-const animationDuration = 300;
-
 function showModal(modal, show) {
     if (isModalAnimating && (modal === themeModal || modal === languageModal || modal === document.getElementById('update-log-modal') || modal === comingSoonModal)) return;
     isModalAnimating = true;
@@ -357,17 +260,12 @@ function showModal(modal, show) {
         content.classList.add('modal-fade-leave');
     }
     setTimeout(() => {
-        if (!show) {
-            modal.classList.add('hidden');
-        }
+        if (!show) modal.classList.add('hidden');
         isModalAnimating = false;
-    }, animationDuration);
+    }, 300);
 }
 
-function toggleThemeModal() {
-    const isHidden = themeModal.classList.contains('hidden');
-    showModal(themeModal, isHidden);
-}
+function toggleThemeModal() { showModal(themeModal, themeModal.classList.contains('hidden')); }
 
 function setGreeting() {
     const mainTitle = document.getElementById('main-title');
@@ -375,96 +273,67 @@ function setGreeting() {
     const now = new Date();
     const hour = now.getHours();
     const t = translations[currentLang];
-    let greeting = '';
-    if (hour >= 5 && hour < 11) greeting = t.greetingMorning;
-    else if (hour >= 11 && hour < 14) greeting = t.greetingNoon;
-    else if (hour >= 14 && hour < 18) greeting = t.greetingAfternoon;
-    else greeting = t.greetingEvening;
+    let greeting = hour >= 5 && hour < 11 ? t.greetingMorning : hour >= 11 && hour < 14 ? t.greetingNoon : hour >= 14 && hour < 18 ? t.greetingAfternoon : t.greetingEvening;
     mainTitle.textContent = greeting;
 }
 
 themeMenuButton.addEventListener('click', toggleThemeModal);
 closeModalButton.addEventListener('click', () => showModal(themeModal, false));
-themeModal.addEventListener('click', (e) => {
-    if (e.target === themeModal) showModal(themeModal, false);
-});
-
+themeModal.addEventListener('click', (e) => { if (e.target === themeModal) showModal(themeModal, false); });
 themeOptionButtons.forEach(button => {
     button.addEventListener('click', () => {
-        const theme = button.getAttribute('data-theme');
-        applyTheme(theme);
+        applyTheme(button.getAttribute('data-theme'));
         showModal(themeModal, false);
     });
 });
-
-sidebarToggle.addEventListener('click', () => {
-    sidebar.classList.toggle('-translate-x-full');
-    sidebar.classList.toggle('hidden');
-});
+sidebarToggle.addEventListener('click', () => { sidebar.classList.toggle('-translate-x-full'); sidebar.classList.toggle('hidden'); });
 
 function startNewChat() {
     currentChatId = Date.now().toString();
     conversationHistory = [];
     chatHistories[currentChatId] = conversationHistory;
-    chatContainer.innerHTML = '';
-    initialView.classList.remove('hidden');
-    chatContainer.classList.add('hidden');
-    mainContent.classList.add('justify-center');
-    mainContent.classList.remove('justify-start');
+    document.getElementById('chat-container').innerHTML = '';
+    document.getElementById('initial-view').classList.remove('hidden');
+    document.getElementById('chat-container').classList.add('hidden');
+    document.getElementById('mainContent').classList.add('justify-center');
+    document.getElementById('mainContent').classList.remove('justify-start');
     setGreeting();
-    
-    isRandomPromptUsedInSession = false; 
+    isRandomPromptUsedInSession = false;
     updateRandomButtonVisibility();
-    
     renderHistoryList();
     setActiveHistoryItem(currentChatId);
     saveStateToLocalStorage();
 }
 
 function updateRandomButtonVisibility() {
-    if (conversationHistory.length === 0 && !isRandomPromptUsedInSession) {
-        randomPromptBtn.classList.remove('hidden');
-    } else {
-        randomPromptBtn.classList.add('hidden');
-    }
+    randomPromptBtn.classList.toggle('hidden', conversationHistory.length !== 0 || isRandomPromptUsedInSession);
 }
 
 function renderHistoryList() {
     historyList.innerHTML = '';
     const currentTheme = localStorage.getItem('theme') || 'dark';
     const themeConfig = themeColors[currentTheme];
-
     Object.keys(chatHistories).sort().reverse().forEach(chatId => {
         const history = chatHistories[chatId];
         if (chatId === currentChatId && history.length === 0) return;
-
         let firstMessageText = translations[currentLang].newChatHistory;
         if (history.length > 0) {
             const firstContent = history[0].content;
-            if (typeof firstContent === 'string') {
-                firstMessageText = firstContent;
-            } else if (Array.isArray(firstContent)) {
+            if (typeof firstContent === 'string') firstMessageText = firstContent;
+            else if (Array.isArray(firstContent)) {
                 const mediaPart = firstContent.find(p => p.type === 'image_url' || p.type === 'video_url');
                 const textPart = firstContent.find(p => p.type === 'text');
-
-                if (mediaPart && mediaPart.type === 'image_url') firstMessageText = '[Hình ảnh]';
-                if (mediaPart && mediaPart.type === 'video_url') firstMessageText = '[Video]';
-
-                if (textPart && textPart.text) {
-                   firstMessageText = (mediaPart ? firstMessageText + " " : "") + textPart.text;
-                }
+                if (mediaPart) firstMessageText = mediaPart.type === 'image_url' ? '[Hình ảnh]' : '[Video]';
+                if (textPart && textPart.text) firstMessageText = (mediaPart ? firstMessageText + " " : "") + textPart.text;
             }
         }
-
         const item = document.createElement('div');
         item.className = 'history-item flex items-center justify-between p-2 rounded-md cursor-pointer';
         item.classList.add(...themeConfig.historyHover);
         item.dataset.chatId = chatId;
-
         const text = document.createElement('span');
         text.className = 'text-sm truncate';
         text.textContent = firstMessageText.substring(0, 25) + (firstMessageText.length > 25 ? '...' : '');
-
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'p-1 rounded-md hover:bg-red-500/20 text-gray-500 hover:text-red-500';
         deleteBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>`;
@@ -472,173 +341,113 @@ function renderHistoryList() {
             e.stopPropagation();
             delete chatHistories[chatId];
             if (currentChatId === chatId) startNewChat();
-            else {
-               saveStateToLocalStorage();
-               renderHistoryList();
-            }
+            else { saveStateToLocalStorage(); renderHistoryList(); }
         };
-
         item.appendChild(text);
         item.appendChild(deleteBtn);
         item.onclick = () => loadChatHistory(chatId);
-        historyList.appendChild(item); 
+        historyList.appendChild(item);
     });
-    if(currentChatId) setActiveHistoryItem(currentChatId);
+    if (currentChatId) setActiveHistoryItem(currentChatId);
 }
 
 function loadChatHistory(chatId) {
     currentChatId = chatId;
     conversationHistory = chatHistories[chatId] || [];
+    const chatContainer = document.getElementById('chat-container');
     chatContainer.innerHTML = '';
-
-    if(conversationHistory.length > 0) {
-         initialView.classList.add('hidden');
-         chatContainer.classList.remove('hidden');
-         mainContent.classList.remove('justify-center');
-         mainContent.classList.add('justify-start');
-         conversationHistory.forEach(msg => {
-            const el = createMessageElement(msg.content, msg.role);
-            chatContainer.appendChild(el);
-         });
-         if (window.MathJax) MathJax.typesetPromise([chatContainer]);
+    if (conversationHistory.length > 0) {
+        document.getElementById('initial-view').classList.add('hidden');
+        chatContainer.classList.remove('hidden');
+        document.getElementById('mainContent').classList.remove('justify-center');
+        document.getElementById('mainContent').classList.add('justify-start');
+        conversationHistory.forEach(msg => chatContainer.appendChild(createMessageElement(msg.content, msg.role)));
+        if (window.MathJax) MathJax.typesetPromise([chatContainer]);
     } else {
-         initialView.classList.remove('hidden');
-         chatContainer.classList.add('hidden');
-         setGreeting();
+        document.getElementById('initial-view').classList.remove('hidden');
+        chatContainer.classList.add('hidden');
+        setGreeting();
     }
-     setActiveHistoryItem(chatId);
-     updateRandomButtonVisibility();
-     saveStateToLocalStorage();
+    setActiveHistoryItem(chatId);
+    updateRandomButtonVisibility();
+    saveStateToLocalStorage();
 }
 
 function setActiveHistoryItem(chatId) {
-    const currentTheme = localStorage.getItem('theme') || 'dark';
-    const themeConfig = themeColors[currentTheme];
+    const themeConfig = themeColors[localStorage.getItem('theme') || 'dark'];
     document.querySelectorAll('.history-item').forEach(item => {
         item.classList.remove(...Object.values(themeColors).flatMap(t => t.historyActive).flat());
-        if(item.dataset.chatId === chatId) item.classList.add(...themeConfig.historyActive);
+        if (item.dataset.chatId === chatId) item.classList.add(...themeConfig.historyActive);
     });
 }
 
 newChatHeaderBtn.addEventListener('click', startNewChat);
 
 document.addEventListener('DOMContentLoaded', () => {
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    const savedLang = localStorage.getItem('language') || 'vi';
-    
-    switchLanguage(savedLang);
-    applyTheme(savedTheme);
+    switchLanguage(localStorage.getItem('language') || 'vi');
+    applyTheme(localStorage.getItem('theme') || 'dark');
     initializeApp();
     handleUpdateLog();
     initTokenSystem();
-    
     soundWaveButton.classList.remove('hidden');
     sendButton.classList.add('hidden');
-
     updateModelButtonText();
     updateLearnButtonVisualState();
-
     messageInput.addEventListener('input', () => {
-        if (messageInput.value.trim().length > 0) {
-            soundWaveButton.classList.add('hidden');
-            sendButton.classList.remove('hidden');
-            isRandomPromptUsedInSession = true; 
-            updateRandomButtonVisibility(); 
-        } else {
-            soundWaveButton.classList.remove('hidden');
-            sendButton.classList.add('hidden');
-        }
+        const hasText = messageInput.value.trim().length > 0;
+        soundWaveButton.classList.toggle('hidden', hasText);
+        sendButton.classList.toggle('hidden', !hasText);
+        if (hasText) { isRandomPromptUsedInSession = true; updateRandomButtonVisibility(); }
     });
-
-    const initialView = document.getElementById('initial-view');
-    if (!initialView.classList.contains('hidden')) {
-         document.getElementById('main-title').classList.add('animate-fade-up');
-    }
-
+    if (!document.getElementById('initial-view').classList.contains('hidden')) document.getElementById('main-title').classList.add('animate-fade-up');
     document.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.key.toLowerCase() === 'g') {
-            e.preventDefault();
-            startNewChat();
-        }
-        const activeEl = document.activeElement;
-        const isTypingInInput = activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA';
-        if (!isTypingInInput && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-            messageInput.focus();
-        }
+        if (e.ctrlKey && e.key.toLowerCase() === 'g') { e.preventDefault(); startNewChat(); }
+        if (!['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName) && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) messageInput.focus();
     });
 });
 
 function handleUpdateLog() {
     const updateLogModal = document.getElementById('update-log-modal');
-    const closeUpdateLogBtn = document.getElementById('close-update-log');
-    const dontShowAgainCheckbox = document.getElementById('dont-show-again');
-    const updateLogVersion = '1.0.2';
-    const hasSeenUpdate = localStorage.getItem('seenUpdateLogVersion');
-
-    if (hasSeenUpdate !== updateLogVersion) showModal(updateLogModal, true);
-
-    const closeAndSavePreference = () => {
-        if (dontShowAgainCheckbox.checked) localStorage.setItem('seenUpdateLogVersion', updateLogVersion);
+    const version = '1.0.3'; // Incremented version
+    if (localStorage.getItem('seenUpdateLogVersion') !== version) showModal(updateLogModal, true);
+    const close = () => {
+        if (document.getElementById('dont-show-again').checked) localStorage.setItem('seenUpdateLogVersion', version);
         showModal(updateLogModal, false);
     };
-
-    closeUpdateLogBtn.addEventListener('click', closeAndSavePreference);
-    updateLogModal.addEventListener('click', (e) => {
-        if(e.target === updateLogModal) closeAndSavePreference();
-    });
+    document.getElementById('close-update-log').addEventListener('click', close);
+    updateLogModal.addEventListener('click', (e) => { if(e.target === updateLogModal) close(); });
 }
 
 function initTokenSystem() {
-    if (tokenConfig.IS_INFINITE) {
-        updateTokenUI();
-        return;
-    }
-    let maxTokens = localStorage.getItem('maxTokens');
-    if (maxTokens === null) {
-        maxTokens = tokenConfig.MAX_TOKENS;
-        localStorage.setItem('maxTokens', maxTokens);
-    }
-    let userTokens = localStorage.getItem('userTokens');
-    if (userTokens === null) {
-        userTokens = maxTokens;
-        localStorage.setItem('userTokens', userTokens);
-        localStorage.setItem('lastTokenRegenTimestamp', Date.now());
-    }
+    if (tokenConfig.IS_INFINITE) { updateTokenUI(); return; }
+    if (!localStorage.getItem('maxTokens')) localStorage.setItem('maxTokens', tokenConfig.MAX_TOKENS);
+    if (!localStorage.getItem('userTokens')) { localStorage.setItem('userTokens', tokenConfig.MAX_TOKENS); localStorage.setItem('lastTokenRegenTimestamp', Date.now()); }
     currentTokenInput.addEventListener('change', handleTokenInputChange);
     maxTokenInput.addEventListener('change', handleTokenInputChange);
     regenerateTokens();
-    setInterval(regenerateTokens, 60 * 1000);
+    setInterval(regenerateTokens, 60000);
 }
 
 function handleTokenInputChange() {
-    let newCurrent = parseInt(currentTokenInput.value);
-    let newMax = parseInt(maxTokenInput.value);
-    if (isNaN(newMax) || newMax < 1) newMax = parseInt(localStorage.getItem('maxTokens')) || tokenConfig.MAX_TOKENS;
-    if (isNaN(newCurrent) || newCurrent < 0) newCurrent = 0;
-    if (newCurrent > newMax) newCurrent = newMax;
-    localStorage.setItem('userTokens', newCurrent);
-    localStorage.setItem('maxTokens', newMax);
+    let cur = parseInt(currentTokenInput.value), max = parseInt(maxTokenInput.value);
+    if (isNaN(max) || max < 1) max = parseInt(localStorage.getItem('maxTokens')) || tokenConfig.MAX_TOKENS;
+    if (isNaN(cur) || cur < 0) cur = 0;
+    if (cur > max) cur = max;
+    localStorage.setItem('userTokens', cur);
+    localStorage.setItem('maxTokens', max);
     updateTokenUI();
 }
 
 function regenerateTokens() {
     if (tokenConfig.IS_INFINITE) return;
-    const maxTokens = parseInt(localStorage.getItem('maxTokens'));
-    let currentTokens = parseInt(localStorage.getItem('userTokens') || '0');
-    if (currentTokens >= maxTokens) {
-        updateTokenUI();
-        return;
-    }
-    const lastRegenTimestamp = parseInt(localStorage.getItem('lastTokenRegenTimestamp') || Date.now());
-    const now = Date.now();
-    const timeElapsed = now - lastRegenTimestamp;
-    const regenIntervalMs = tokenConfig.TOKEN_REGEN_INTERVAL_MINUTES * 60 * 1000;
-    if (timeElapsed >= regenIntervalMs) {
-        const intervalsPassed = Math.floor(timeElapsed / regenIntervalMs);
-        const tokensToAdd = intervalsPassed * tokenConfig.TOKEN_REGEN_AMOUNT;
-        currentTokens = Math.min(maxTokens, currentTokens + tokensToAdd);
-        localStorage.setItem('userTokens', currentTokens);
-        localStorage.setItem('lastTokenRegenTimestamp', now);
+    const max = parseInt(localStorage.getItem('maxTokens')), last = parseInt(localStorage.getItem('lastTokenRegenTimestamp') || Date.now());
+    let cur = parseInt(localStorage.getItem('userTokens') || '0');
+    if (cur >= max) { updateTokenUI(); return; }
+    const elapsed = Date.now() - last, interval = tokenConfig.TOKEN_REGEN_INTERVAL_MINUTES * 60000;
+    if (elapsed >= interval) {
+        cur = Math.min(max, cur + Math.floor(elapsed / interval) * tokenConfig.TOKEN_REGEN_AMOUNT);
+        localStorage.setItem('userTokens', cur);
+        localStorage.setItem('lastTokenRegenTimestamp', Date.now());
     }
     updateTokenUI();
 }
@@ -653,24 +462,18 @@ function updateTokenUI() {
     }
     tokenInputsContainer.classList.remove('hidden');
     tokenInfinity.classList.add('hidden');
-    const currentTokens = parseInt(localStorage.getItem('userTokens') || '0');
-    const maxTokens = parseInt(localStorage.getItem('maxTokens') || tokenConfig.MAX_TOKENS);
-    currentTokenInput.value = currentTokens;
-    maxTokenInput.value = maxTokens;
-    if (currentTokens < tokenConfig.TOKEN_COST_PER_MESSAGE) {
-        messageInput.disabled = true;
-        messageInput.placeholder = translations[currentLang].outOfTokensPlaceholder;
-    } else {
-        messageInput.placeholder = translations[currentLang].messagePlaceholder;
-    }
+    const cur = parseInt(localStorage.getItem('userTokens') || '0'), max = parseInt(localStorage.getItem('maxTokens') || tokenConfig.MAX_TOKENS);
+    currentTokenInput.value = cur;
+    maxTokenInput.value = max;
+    if (cur < tokenConfig.TOKEN_COST_PER_MESSAGE) { messageInput.disabled = true; messageInput.placeholder = translations[currentLang].outOfTokensPlaceholder; }
+    else messageInput.placeholder = translations[currentLang].messagePlaceholder;
 }
 
 function consumeToken() {
     if (tokenConfig.IS_INFINITE) return true;
-    let currentTokens = parseInt(localStorage.getItem('userTokens') || '0');
-    if (currentTokens >= tokenConfig.TOKEN_COST_PER_MESSAGE) {
-        currentTokens -= tokenConfig.TOKEN_COST_PER_MESSAGE;
-        localStorage.setItem('userTokens', currentTokens);
+    let cur = parseInt(localStorage.getItem('userTokens') || '0');
+    if (cur >= tokenConfig.TOKEN_COST_PER_MESSAGE) {
+        localStorage.setItem('userTokens', cur - tokenConfig.TOKEN_COST_PER_MESSAGE);
         updateTokenUI();
         return true;
     }
@@ -678,299 +481,118 @@ function consumeToken() {
 }
 
 const chatForm = document.getElementById('chat-form');
-const chatContainer = document.getElementById('chat-container');
-const initialView = document.getElementById('initial-view');
-const mainContent = document.getElementById('mainContent');
-const videoBtn = document.getElementById('video-icon-btn');
-const learnBtn = document.getElementById('learn-icon-btn');
-const modelButton = document.getElementById('model-button');
-const modelPopup = document.getElementById('model-popup');
-
-const randomPrompts = {
-    vi: ["Kể một câu chuyện cười", "Thủ đô của nước Pháp là gì?", "Viết một đoạn văn về tầm quan trọng của việc đọc sách.", "Công thức làm món phở bò?"],
-    en: ["Tell me a joke", "What is the capital of France?", "Write a paragraph about the importance of reading books.", "What is the recipe for beef pho?"],
-    zh: ["讲个笑话", "法国的首都是哪里？", "写一段关于阅读重要性的段落。", "牛肉河粉的食谱是什么？"],
-    hi: ["एक चुटकुला सुनाओ", "फ्रांस की राजधानी क्या है?", "किताबें पढ़ने के महत्व पर एक पैराग्राफ लिखें।", "बीफ फो की रेसिपी क्या है?"],
-    es: ["Cuéntame un chiste", "¿Cuál es la capital de Francia?", "Escribe un párrafo sobre la importancia de leer libros.", "¿Cuál es la receta del pho de ternera?"],
-    fr: ["Raconte-moi une blague", "Quelle est la capitale de la France ?", "Écrivez un paragraphe sur l'importance de la lecture.", "Quelle est la recette du phở au bœuf ?"],
-    ja: ["冗談を言って", "フランスの首都はどこですか？", "読書の重要性について段落を書いてください。", "牛肉フォーのレシピは何ですか？"],
-    it: ["Raccontami una barzelletta", "Qual è la capitale della Francia?", "Scrivi un paragrafo sull'importanza di leggere libri.", "Qual è la ricetta per il pho di manzo?"]
-};
-
 randomPromptBtn.addEventListener('click', () => {
     if (isRandomPromptUsedInSession) return;
-    const prompts = randomPrompts[currentLang];
-    const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
-    messageInput.value = randomPrompt;
-    messageInput.dispatchEvent(new Event('input')); 
+    const p = randomPrompts[currentLang];
+    messageInput.value = p[Math.floor(Math.random() * p.length)];
+    messageInput.dispatchEvent(new Event('input'));
     isRandomPromptUsedInSession = true;
     updateRandomButtonVisibility();
     chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
 });
-
 videoBtn.addEventListener('click', () => alert(translations[currentLang].comingSoon));
+learnBtn.addEventListener('click', () => { isTutorMode = !isTutorMode; localStorage.setItem('isTutorMode', isTutorMode); updateLearnButtonVisualState(); });
 
-function updateLearnButtonVisualState() {
-    const learnIcon = learnBtn.querySelector('svg');
-    const currentTheme = localStorage.getItem('theme') || 'dark';
-    const activeColorClass = currentTheme === 'light' ? 'bg-blue-500' : 'bg-blue-600';
-    
-    if (isTutorMode) {
-        learnBtn.classList.add(activeColorClass);
-        learnIcon.classList.add('text-white');
-        learnIcon.classList.remove(themeColors[currentTheme].iconColor);
-    } else {
-        learnBtn.classList.remove('bg-blue-600', 'bg-blue-500');
-        learnIcon.classList.remove('text-white');
-        learnIcon.classList.add(themeColors[currentTheme].iconColor);
-    }
-}
-
-learnBtn.addEventListener('click', () => {
-    isTutorMode = !isTutorMode; 
-    localStorage.setItem('isTutorMode', isTutorMode);
-    updateLearnButtonVisualState();
-});
-
-function updateModelButtonText() {
-    const t = translations[currentLang];
-    if (currentModel && currentModel.model) {
-        textElements.modelBtnText.textContent = currentModel.model;
-    } else {
-         textElements.modelBtnText.textContent = t.modelButtonDefault;
-    }
-}
-
-const createModelButton = (text, description, model, version = '', iconSvg) => {
-    const theme = localStorage.getItem('theme') || 'dark';
-    const themeConfig = themeColors[theme];
-    const button = document.createElement('button');
-    button.className = 'w-full text-left p-2 rounded-lg transition-colors duration-200 flex items-center justify-between btn-interaction';
-    button.classList.add(...themeConfig.popupButton);
-    button.dataset.model = model;
-    if (version) button.dataset.version = version;
-    const leftContainer = document.createElement('div');
-    leftContainer.className = 'flex items-center gap-3';
-    const iconContainer = document.createElement('div');
-    iconContainer.innerHTML = iconSvg;
-    leftContainer.appendChild(iconContainer);
-    const textContainer = document.createElement('div');
-    textContainer.className = 'flex flex-col';
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'font-semibold leading-tight';
-    nameSpan.textContent = text;
-    textContainer.appendChild(nameSpan);
-    const descSpan = document.createElement('span');
-    const descColor = theme === 'light' ? 'text-gray-500' : 'text-gray-400';
-    descSpan.className = `text-xs ${descColor} leading-tight`;
-    descSpan.textContent = description;
-    textContainer.appendChild(descSpan);
-    leftContainer.appendChild(textContainer);
-    button.appendChild(leftContainer);
-    const checkmarkContainer = document.createElement('div');
-    checkmarkContainer.innerHTML = `<svg class="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>`;
-    if (!(currentModel && currentModel.model === model && (!version || currentModel.version === version))) {
-        checkmarkContainer.classList.add('hidden');
-    }
-    button.appendChild(checkmarkContainer);
-    return button;
-};
+function updateModelButtonText() { textElements.modelBtnText.textContent = (currentModel && currentModel.model) ? currentModel.model : translations[currentLang].modelButtonDefault; }
 
 const showInitialModels = () => {
     modelPopup.innerHTML = '';
     const t = translations[currentLang];
-    const iconThunder = `<svg class="w-6 h-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>`;
-    const iconLightbulb = `<svg class="w-6 h-6 text-amber-300" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.311a7.5 7.5 0 01-7.5 0c-1.255 0-2.443-.29-3.5-.832a7.5 7.5 0 0114.5.032c-.318.13-.644.242-.984.326a7.5 7.5 0 01-4.016.033z" /></svg>`;
-    const iconBrain = `<svg class="w-6 h-6 text-pink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>`;
     const models = [
-        { text: 'Mini', description: t.modelMiniDesc, model: 'Mini', version: '', icon: iconThunder },
-        { text: 'Smart', description: t.modelSmartDesc, model: 'Smart', version: '', icon: iconLightbulb },
-        { text: 'Nerd', description: t.modelNerdDesc, model: 'Nerd', version: '', icon: iconBrain },
+        { text: 'Mini', description: t.modelMiniDesc, model: 'Mini', icon: `<svg class="w-6 h-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>` },
+        { text: 'Smart', description: t.modelSmartDesc, model: 'Smart', icon: `<svg class="w-6 h-6 text-amber-300" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.311a7.5 7.5 0 01-7.5 0c-1.255 0-2.443-.29-3.5-.832a7.5 7.5 0 0114.5.032c-.318.13-.644.242-.984.326a7.5 7.5 0 01-4.016.033z" /></svg>` },
+        { text: 'Nerd', description: t.modelNerdDesc, model: 'Nerd', icon: `<svg class="w-6 h-6 text-pink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>` }
     ];
     models.forEach(m => {
-        const btn = createModelButton(m.text, m.description, m.model, m.version, m.icon);
-        btn.addEventListener('click', selectModelAndClose);
+        const btn = createModelButton(m.text, m.description, m.model, '', m.icon);
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentModel = { model: btn.dataset.model, version: null };
+            localStorage.setItem('currentModel', JSON.stringify(currentModel));
+            updateModelButtonText();
+            modelPopup.classList.add('hidden');
+        });
         modelPopup.appendChild(btn);
     });
 };
-
-const selectModelAndClose = (e) => {
-    e.stopPropagation();
-    const button = e.currentTarget;
-    currentModel = {
-        model: button.dataset.model,
-        version: button.dataset.version || null
-    };
-    localStorage.setItem('currentModel', JSON.stringify(currentModel));
-    updateModelButtonText();
-    modelPopup.classList.add('hidden');
-};
-
-modelButton.addEventListener('click', (e) => {
-    e.stopPropagation();
-    showInitialModels();
-    modelPopup.classList.toggle('hidden');
-});
-
-document.addEventListener('click', (e) => {
-    if (!modelButton.contains(e.target) && !modelPopup.contains(e.target)) {
-        modelPopup.classList.add('hidden');
-    }
-});
-
+modelButton.addEventListener('click', (e) => { e.stopPropagation(); showInitialModels(); modelPopup.classList.toggle('hidden'); });
+document.addEventListener('click', (e) => { if (!modelButton.contains(e.target) && !modelPopup.contains(e.target)) modelPopup.classList.add('hidden'); });
 langSwitchBtn.addEventListener('click', () => showModal(languageModal, true));
 closeLanguageModalBtn.addEventListener('click', () => showModal(languageModal, false));
-languageModal.addEventListener('click', (e) => {
-    if (e.target === languageModal) showModal(languageModal, false);
-});
+languageModal.addEventListener('click', (e) => { if(e.target === languageModal) showModal(languageModal, false); });
+languageOptionButtons.forEach(btn => btn.addEventListener('click', () => { switchLanguage(btn.dataset.lang); showModal(languageModal, false); }));
 
-languageOptionButtons.forEach(button => {
-    button.addEventListener('click', () => {
-        const lang = button.getAttribute('data-lang');
-        switchLanguage(lang);
-        showModal(languageModal, false);
-    });
-});
-
-// === UPDATED FUNCTION: FORMAT AI RESPONSE ===
-// Fixes visual issues and supports ## headers
 function formatAIResponse(text) {
-    // 1. Xử lý Tiêu đề (## Heading)
-    // Regex tìm chuỗi bắt đầu bằng ## và thay thế bằng thẻ h2 được style đẹp mắt, to, in đậm, màu xanh
-    let formattedText = text.replace(/^##\s+(.*)$/gm, '<h2 class="text-xl font-bold text-blue-300 mt-4 mb-2 border-b border-gray-500/30 pb-1">$1</h2>');
-    
-    // 2. Xử lý In đậm (**Bold**)
-    formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-    // 3. Xử lý Xuống dòng (\n thành <br>)
-    formattedText = formattedText.replace(/\n/g, '<br>');
-
-    return formattedText;
+    let formatted = text.replace(/^##\s+(.*)$/gm, '<h2 class="text-xl font-bold text-blue-300 mt-4 mb-2 border-b border-gray-500/30 pb-1">$1</h2>');
+    formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    formatted = formatted.replace(/\n/g, '<br>');
+    return formatted;
 }
 
-function createMessageElement(messageContent, sender) {
+function createMessageElement(content, sender) {
     const row = document.createElement('div');
     row.classList.add('flex', 'w-full', 'mb-4');
-    const messageWrapper = document.createElement('div');
-    const currentTheme = localStorage.getItem('theme') || 'dark';
-    const themeConfig = themeColors[currentTheme];
+    const wrapper = document.createElement('div');
+    const themeConfig = themeColors[localStorage.getItem('theme') || 'dark'];
+    
     if (sender === 'user') {
         row.classList.add('justify-end', 'user-message');
-        messageWrapper.classList.add('user-message-wrapper', 'animate-pop-in', 'px-5', 'py-3', 'rounded-3xl', 'max-w-4xl', 'shadow-md', 'flex', 'flex-col', 'gap-2');
-        messageWrapper.classList.add(...themeConfig.userMessage);
-        if (Array.isArray(messageContent)) {
-            messageContent.forEach(part => {
-                if (part.type === 'image_url') {
-                    const img = document.createElement('img');
-                    img.src = part.image_url.url;
-                    img.className = 'rounded-lg max-w-xs';
-                    messageWrapper.appendChild(img);
-                } else if (part.type === 'video_url') {
-                    const video = document.createElement('video');
-                    video.src = part.video_url.url;
-                    video.className = 'rounded-lg max-w-xs';
-                    video.controls = true;
-                    messageWrapper.appendChild(video);
-                } else if (part.type === 'text') {
-                    const textDiv = document.createElement('div');
-                    textDiv.innerHTML = part.text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                    messageWrapper.appendChild(textDiv);
-                }
+        wrapper.className = 'user-message-wrapper animate-pop-in px-5 py-3 rounded-3xl max-w-4xl shadow-md flex flex-col gap-2';
+        wrapper.classList.add(...themeConfig.userMessage);
+        if (Array.isArray(content)) {
+            content.forEach(p => {
+                if (p.type === 'image_url') { const i = document.createElement('img'); i.src = p.image_url.url; i.className = 'rounded-lg max-w-xs'; wrapper.appendChild(i); }
+                else if (p.type === 'video_url') { const v = document.createElement('video'); v.src = p.video_url.url; v.className = 'rounded-lg max-w-xs'; v.controls = true; wrapper.appendChild(v); }
+                else if (p.type === 'text') { const t = document.createElement('div'); t.innerHTML = p.text.replace(/</g, "&lt;").replace(/>/g, "&gt;"); wrapper.appendChild(t); }
             });
-        } else {
-             messageWrapper.innerHTML = messageContent.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        }
+        } else wrapper.innerHTML = content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
     } else {
         row.classList.add('justify-start');
-        messageWrapper.classList.add('ai-message-wrapper', 'animate-pop-in', 'max-w-4xl');
-        messageWrapper.classList.add(...themeConfig.aiMessage);
-        messageWrapper.innerHTML = formatAIResponse(messageContent);
+        wrapper.className = 'ai-message-wrapper animate-pop-in max-w-4xl';
+        wrapper.classList.add(...themeConfig.aiMessage);
+        wrapper.innerHTML = formatAIResponse(content);
     }
-    row.appendChild(messageWrapper);
+    row.appendChild(wrapper);
     return row;
 }
 
-// === UPDATED: SYSTEM PROMPTS (Simplified & Strict) ===
-// Fixes grammar issues by being concise and clear
 const systemPrompts = {
-    vi: {
-        tutor: "Bạn là Oceep, một gia sư AI thân thiện. Nhiệm vụ: giải thích khái niệm phức tạp một cách dễ hiểu. Sử dụng LaTeX \\( ... \\) cho công thức toán.",
-        assistant: `Bạn là Oceep, trợ lý ảo của FoxAI. Hãy trả lời đúng trọng tâm. Sử dụng LaTeX \\( ... \\) cho công thức toán.`
-    },
-    en: {
-        tutor: "You are Oceep, a friendly AI tutor. Explain complex concepts simply. Use LaTeX \\( ... \\) for math.",
-        assistant: "You are Oceep by FoxAI. Answer concisely. Use LaTeX \\( ... \\) for math."
-    },
-    ja: {
-        tutor: "あなたはOceepというAI家庭教師です。正確な日本語を使ってください。見出しには「##」を使用し、数式にはLaTeXを使用してください。",
-        assistant: "あなたはFoxAIのOceepです。簡潔に答えてください。正確な日本語を使い、見出しには「##」を使用してください。"
-    },
-    it: {
-        tutor: "Sei Oceep, un tutor AI. Usa una grammatica perfetta. Usa '##' per le intestazioni. Usa LaTeX per la matematica.",
-        assistant: "Sei Oceep di FoxAI. Rispondi concisamente. Usa una grammatica perfetta. Usa '##' per le intestazioni."
-    }
+    vi: { tutor: "Bạn là Oceep, gia sư AI. Yêu cầu: Tiếng Việt chuẩn, đúng chính tả. Dùng '##' cho tiêu đề. Dùng LaTeX cho toán.", assistant: "Bạn là Oceep. Trả lời ngắn gọn. Yêu cầu: Tiếng Việt chuẩn, đúng chính tả. Dùng '##' cho tiêu đề. Dùng LaTeX cho toán." },
+    en: { tutor: "You are Oceep, AI tutor. Req: Perfect grammar. Use '##' for headers. Use LaTeX for math.", assistant: "You are Oceep. Req: Perfect grammar. Use '##' for headers. Use LaTeX for math." },
+    ja: { tutor: "Oceepです。正確な日本語と文法。見出しは「##」。数式はLaTeX。", assistant: "Oceepです。簡潔に。正確な日本語。見出しは「##」。数式はLaTeX。" },
+    it: { tutor: "Sei Oceep. Grammatica perfetta. Usa '##' per intestazioni. LaTeX per matematica.", assistant: "Sei Oceep. Conciso. Grammatica perfetta. Usa '##' per intestazioni. LaTeX per matematica." }
 };
 
-// ============================================================
-// MAIN FIX FOR CONNECTION AND STREAMING ERRORS (Cloudflare Version)
-// ============================================================
-async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
+async function streamAIResponse(modelName, messages, aiMessageEl, signal, token) {
     const langPrompts = systemPrompts[currentLang] || systemPrompts['en'];
-    const systemContent = isTutorMode ? langPrompts.tutor : langPrompts.assistant;
-    const systemMessage = { role: 'system', content: systemContent };
-    const messagesWithSystemPrompt = [systemMessage, ...messages];
+    const systemMsg = { role: 'system', content: isTutorMode ? langPrompts.tutor : langPrompts.assistant };
+    const fullMsgs = [systemMsg, ...messages];
     
-    // --- URL CONFIGURATION FOR CLOUDFLARE ---
-    // Khi deploy lên Cloudflare Pages, file script.js sẽ gọi về cùng domain (/api/handler)
-    // Nếu chạy Localhost, bạn cần điền URL của dự án Cloudflare Pages vào biến bên dưới.
-    
-    const isLocal = window.location.hostname === 'localhost' || 
-                    window.location.hostname === '127.0.0.1' ||
-                    window.location.protocol === 'file:';
-
-    // ⚠️ NẾU TEST LOCAL: Điền URL Cloudflare Pages của bạn vào đây (ví dụ: 'https://oceep-chat.pages.dev')
-    // Nếu đã Deploy lên mạng thì để trống cũng được.
-    const CLOUDFLARE_PROJECT_URL = ''; 
-
-    const API_URL = isLocal && CLOUDFLARE_PROJECT_URL 
-        ? `${CLOUDFLARE_PROJECT_URL}/api/handler` 
-        : '/api/handler';
-
-    console.log(`[System] Requesting: ${modelName} via ${API_URL}`);
+    // --- CLOUDFLARE CONFIG ---
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
+    const CLOUDFLARE_PROJECT_URL = ''; // Điền URL nếu test local
+    const API_URL = (isLocal && CLOUDFLARE_PROJECT_URL) ? `${CLOUDFLARE_PROJECT_URL}/api/handler` : '/api/handler';
 
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                modelName: modelName,
-                messages: messagesWithSystemPrompt,
-                max_tokens: 4000, // Tăng giới hạn token lên cao để không bị cắt chữ
-                temperature: 0.7  // Cân bằng độ sáng tạo
+                modelName, messages: fullMsgs, max_tokens: 4000, temperature: 0.7,
+                token: token // Gửi Captcha Token
             }),
             signal
         });
 
         if (!response.ok) {
-            let errorMsg = `Server Error (${response.status})`;
-            try {
-                const errorBody = await response.text(); 
-                try {
-                    const errorData = JSON.parse(errorBody);
-                    if (errorData.error) errorMsg = errorData.error;
-                    if (errorData.details) errorMsg += ` - ${errorData.details}`;
-                } catch (parseError) {
-                    if (errorBody) errorMsg = errorBody.substring(0, 200);
-                }
-            } catch (readError) {
-                console.error("Could not read error response", readError);
-            }
-            throw new Error(errorMsg);
+            let msg = `Server Error (${response.status})`;
+            try { const err = await response.json(); if(err.error) msg = err.error; } catch(e){}
+            throw new Error(msg);
         }
 
         const reader = response.body.getReader();
-        const decoder = new TextDecoder('utf-8');
-        let fullResponseText = "";
+        const decoder = new TextDecoder();
+        let fullText = "";
 
         while (true) {
             const { value, done } = await reader.read();
@@ -979,112 +601,71 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
             const lines = chunk.split('\n');
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
-                    const jsonString = line.substring(6).trim();
-                    if (jsonString === '[DONE]') break;
+                    const json = line.substring(6).trim();
+                    if (json === '[DONE]') break;
                     try {
-                        const data = JSON.parse(jsonString);
+                        const data = JSON.parse(json);
                         const content = data.choices?.[0]?.delta?.content || "";
                         if (content) {
-                            fullResponseText += content;
-                            aiMessageEl.firstChild.innerHTML = formatAIResponse(fullResponseText);
-                            
-                            // Auto-scroll xuống dưới cùng khi đang viết
+                            fullText += content;
+                            aiMessageEl.firstChild.innerHTML = formatAIResponse(fullText);
                             const chatContainer = document.getElementById('chat-container');
-                            if(chatContainer) {
-                                chatContainer.scrollTop = chatContainer.scrollHeight;
-                            }
+                            chatContainer.scrollTop = chatContainer.scrollHeight;
                         }
-                    } catch (e) { }
+                    } catch (e) {}
                 }
             }
         }
-        return fullResponseText;
-
+        return fullText;
     } catch (error) {
         if (error.name === 'AbortError') return aiMessageEl.firstChild.innerText;
-        
-        console.error("Connection Error Details:", error);
-        
-        let userMsg = "Đã có lỗi xảy ra.";
-        
-        if (error.message.includes('Failed to fetch')) {
-             userMsg = isLocal 
-                ? "Lỗi kết nối. Nếu bạn đang chạy Local, hãy điền URL Cloudflare Pages vào biến CLOUDFLARE_PROJECT_URL trong script.js." 
-                : "Không thể kết nối đến Server. Vui lòng kiểm tra lại đường truyền.";
-        } else if (error.message.includes('404')) {
-            userMsg = "Lỗi 404: Không tìm thấy API. Hãy đảm bảo bạn đã deploy code lên Cloudflare Pages đúng cấu trúc (functions/api/handler.js).";
-        } else {
-            userMsg = `Lỗi: ${error.message}`;
-        }
-        
-        aiMessageEl.firstChild.innerHTML = `<span class="text-red-400">${userMsg}</span>`;
+        let msg = "Lỗi kết nối.";
+        if (error.message.includes('403')) msg = "Xác thực Captcha thất bại.";
+        else if (error.message.includes('404')) msg = "Không tìm thấy API.";
+        else msg = `Lỗi: ${error.message}`;
+        aiMessageEl.firstChild.innerHTML = `<span class="text-red-400">${msg}</span>`;
         throw error;
-    }
-}
-
-stopButton.addEventListener('click', () => {
-    if (abortController) abortController.abort();
-});
-
-function setInputActive(isActive) {
-    const t = translations[currentLang];
-    messageInput.disabled = !isActive;
-    const footerButtons = [
-        randomPromptBtn, videoBtn, learnBtn, uploadFileBtn, modelButton
-    ];
-    footerButtons.forEach(btn => btn.disabled = !isActive);
-    if (isActive) {
-        updateTokenUI();
-    } else {
-        messageInput.placeholder = t.aiTypingPlaceholder;
     }
 }
 
 chatForm.addEventListener('submit', async function(event) {
     event.preventDefault();
+    
+    // --- CAPTCHA CHECK ---
+    const formData = new FormData(chatForm);
+    const token = formData.get('cf-turnstile-response');
+    if (!token) { alert("Vui lòng xác thực bạn không phải là Robot!"); return; }
+    // ---------------------
+
     const message = messageInput.value.trim();
     if (!message && !stagedFile) return;
+    if (!consumeToken()) return;
 
-    if (!consumeToken()) {
-        return;
+    if (!document.getElementById('initial-view').classList.contains('hidden')) {
+        document.getElementById('initial-view').classList.add('hidden');
+        document.getElementById('chat-container').classList.remove('hidden');
+        document.getElementById('mainContent').classList.remove('justify-center');
+        document.getElementById('mainContent').classList.add('justify-start');
     }
 
-    if (!initialView.classList.contains('hidden')) {
-        initialView.style.opacity = '0';
-        setTimeout(() => {
-            initialView.classList.add('hidden');
-            chatContainer.classList.remove('hidden');
-            mainContent.classList.remove('justify-center');
-            mainContent.classList.add('justify-start');
-        }, 500);
-    }
+    const userContent = [];
+    if (stagedFile) userContent.push({ type: stagedFile.type === 'image' ? "image_url" : "video_url", [stagedFile.type === 'image' ? "image_url" : "video_url"]: { url: stagedFile.url } });
+    if (message) userContent.push({ type: "text", text: message });
 
-    const userMessageContent = [];
-    if (stagedFile) {
-        if (stagedFile.type === 'image') {
-            userMessageContent.push({ type: "image_url", image_url: { url: stagedFile.url } });
-        } else if (stagedFile.type === 'video') {
-            userMessageContent.push({ type: "video_url", video_url: { url: stagedFile.url } });
-        }
-    }
-    if (message) userMessageContent.push({ type: "text", text: message });
-
-    const userMessageEl = createMessageElement(userMessageContent, 'user');
-    chatContainer.appendChild(userMessageEl);
-
-    const historyContent = userMessageContent.length === 1 && userMessageContent[0].type === 'text'
-        ? message
-        : userMessageContent;
-    conversationHistory.push({ role: 'user', content: historyContent });
+    const chatContainer = document.getElementById('chat-container');
+    chatContainer.appendChild(createMessageElement(userContent, 'user'));
+    conversationHistory.push({ role: 'user', content: userContent.length === 1 && userContent[0].type === 'text' ? message : userContent });
     renderHistoryList();
 
     messageInput.value = '';
-    messageInput.dispatchEvent(new Event('input')); 
+    messageInput.dispatchEvent(new Event('input'));
     stagedFile = null;
     fileThumbnailContainer.innerHTML = '';
-    isRandomPromptUsedInSession = true; 
-    updateRandomButtonVisibility(); 
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    isRandomPromptUsedInSession = true;
+    updateRandomButtonVisibility();
+    
+    // Reset Captcha sau khi gửi (để bắt xác thực lại cho lần sau nếu muốn, hoặc để đó)
+    try { turnstile.reset(); } catch(e) {}
 
     const aiMessageEl = createMessageElement('', 'ai');
     aiMessageEl.firstChild.classList.add('streaming');
@@ -1094,78 +675,20 @@ chatForm.addEventListener('submit', async function(event) {
     sendButton.classList.add('hidden');
     soundWaveButton.classList.add('hidden');
     stopButton.classList.remove('hidden');
-    
     setInputActive(false);
 
     abortController = new AbortController();
 
     try {
-        const modelToUse = (currentModel && currentModel.model) ? currentModel.model : 'Mini';
-        const fullAiResponse = await streamAIResponse(modelToUse, conversationHistory, aiMessageEl, abortController.signal);
+        const fullAiResponse = await streamAIResponse((currentModel && currentModel.model) || 'Mini', conversationHistory, aiMessageEl, abortController.signal, token);
         conversationHistory.push({ role: 'assistant', content: fullAiResponse });
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-        saveStateToLocalStorage(); 
-    } catch (error) {
-        // Error handled inside streamAIResponse, message already displayed.
-        // Just cleanup UI here.
-    } finally {
+        saveStateToLocalStorage();
+    } catch (error) { } 
+    finally {
         aiMessageEl.firstChild.classList.remove('streaming');
         if (window.MathJax) MathJax.typesetPromise([aiMessageEl]);
-
         stopButton.classList.add('hidden');
         soundWaveButton.classList.remove('hidden');
-        
         setInputActive(true);
     }
 });
-
-uploadFileBtn.addEventListener('click', () => fileInput.click());
-
-fileInput.addEventListener('change', (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    if (stagedFile && stagedFile.type === 'video') {
-        URL.revokeObjectURL(stagedFile.url);
-    }
-    stagedFile = null;
-    fileThumbnailContainer.innerHTML = '';
-    
-    const removeButtonHTML = `<button id="remove-file-btn" class="absolute top-0 right-0 -mt-2 -mr-2 bg-red-500 text-white rounded-full h-6 w-6 flex items-center justify-center font-bold text-xs btn-interaction">&times;</button>`;
-
-    if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            stagedFile = { file: file, url: e.target.result, type: 'image' };
-            fileThumbnailContainer.innerHTML = `
-                <div class="relative inline-block">
-                    <img src="${stagedFile.url}" class="h-20 w-auto rounded-lg" />
-                    ${removeButtonHTML}
-                </div>
-            `;
-            addRemoveButtonListener();
-        };
-        reader.readAsDataURL(file);
-    } else if (file.type.startsWith('video/')) {
-        const objectURL = URL.createObjectURL(file);
-        stagedFile = { file: file, url: objectURL, type: 'video' };
-        fileThumbnailContainer.innerHTML = `
-            <div class="relative inline-block">
-                <video src="${stagedFile.url}" class="h-20 w-auto rounded-lg" autoplay muted loop playsinline></video>
-                ${removeButtonHTML}
-            </div>
-        `;
-        addRemoveButtonListener();
-    }
-});
-
-function addRemoveButtonListener() {
-    document.getElementById('remove-file-btn').addEventListener('click', () => {
-        if (stagedFile && stagedFile.type === 'video') {
-             URL.revokeObjectURL(stagedFile.url);
-        }
-        stagedFile = null;
-        fileThumbnailContainer.innerHTML = '';
-        fileInput.value = '';
-    });
-}
