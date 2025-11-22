@@ -3,7 +3,7 @@
 const apiConfig = {
     'Mini': {
         key: process.env.MINI_API_KEY,
-        model: 'deepseek/deepseek-r1:free'
+        model: 'openai/gpt-oss-20b:free'
     },
     'Smart': {
         key: process.env.SMART_API_KEY,
