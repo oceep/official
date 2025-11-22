@@ -938,8 +938,8 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
             body: JSON.stringify({
                 modelName: modelName,
                 messages: messagesWithSystemPrompt,
-                max_tokens: 3000, // <--- QUAN TRỌNG: Tăng giới hạn từ để không bị cắt giữa chừng
-                temperature: 0.7  // <--- QUAN TRỌNG: Cân bằng độ sáng tạo để tránh nói sai ngữ pháp
+                max_tokens: 25000, // <--- QUAN TRỌNG: Tăng giới hạn từ để không bị cắt giữa chừng
+                temperature: 1  // <--- QUAN TRỌNG: Cân bằng độ sáng tạo để tránh nói sai ngữ pháp
             }),
             signal
         });
