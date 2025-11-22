@@ -1,5 +1,3 @@
-// File: functions/api/handler.js
-
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -14,29 +12,9 @@ export async function onRequestPost(context) {
     const { request, env } = context;
 
     try {
-        const { modelName, messages, max_tokens, temperature, token } = await request.json();
+        const { modelName, messages, max_tokens, temperature } = await request.json();
 
-        // --- 1. XÁC MINH CAPTCHA (TURNSTILE) ---
-        const TURNSTILE_SECRET = env.TURNSTILE_SECRET_KEY; 
-        
-        if (TURNSTILE_SECRET) { 
-            const verifyUrl = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
-            const verifyFormData = new FormData();
-            verifyFormData.append('secret', TURNSTILE_SECRET);
-            verifyFormData.append('response', token);
-            verifyFormData.append('remoteip', request.headers.get('CF-Connecting-IP'));
-
-            const verifyResult = await fetch(verifyUrl, { method: 'POST', body: verifyFormData });
-            const outcome = await verifyResult.json();
-            
-            if (!outcome.success) {
-                return new Response(
-                    JSON.stringify({ error: 'Xác thực Captcha thất bại.' }),
-                    { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-                );
-            }
-        }
-        // --- HẾT PHẦN XÁC MINH ---
+        // --- BỎ QUA CHECK CAPTCHA VÌ ĐÃ CÓ WAF ---
 
         const apiConfig = {
             'Mini': { key: env.MINI_API_KEY, model: 'openai/gpt-oss-20b:free' },
@@ -66,7 +44,7 @@ export async function onRequestPost(context) {
                 model: config.model,
                 messages: messages,
                 stream: true,
-                max_tokens: max_tokens || 4000,
+                max_tokens: max_tokens || 3000,
                 temperature: temperature || 0.7
             }),
         });
