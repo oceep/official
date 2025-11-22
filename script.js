@@ -833,10 +833,11 @@ languageOptionButtons.forEach(button => {
 });
 
 // === UPDATED FUNCTION: FORMAT AI RESPONSE ===
+// Fixes visual issues and supports ## headers
 function formatAIResponse(text) {
     // 1. Xử lý Tiêu đề (## Heading)
-    // Regex tìm chuỗi bắt đầu bằng ## và thay thế bằng thẻ h2 được style đẹp mắt
-    let formattedText = text.replace(/^##\s+(.*)$/gm, '<h2 class="text-xl font-bold mt-4 mb-2 text-blue-300 border-b border-gray-500/30 pb-1">$1</h2>');
+    // Regex tìm chuỗi bắt đầu bằng ## và thay thế bằng thẻ h2 được style đẹp mắt, to, in đậm, màu xanh
+    let formattedText = text.replace(/^##\s+(.*)$/gm, '<h2 class="text-xl font-bold text-blue-300 mt-4 mb-2 border-b border-gray-500/30 pb-1">$1</h2>');
     
     // 2. Xử lý In đậm (**Bold**)
     formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
@@ -889,23 +890,24 @@ function createMessageElement(messageContent, sender) {
     return row;
 }
 
-// === UPDATED: SYSTEM PROMPTS FOR STRICT SPELLING & HEADERS ===
+// === UPDATED: SYSTEM PROMPTS (Simplified & Strict) ===
+// Fixes grammar issues by being concise and clear
 const systemPrompts = {
     vi: {
-        tutor: "Bạn là một gia sư AI thân thiện và kiên nhẫn tên là Oceep. Mục tiêu của bạn là dạy và giải thích các khái niệm phức tạp một cách đơn giản. QUY TẮC QUAN TRỌNG: Luôn sử dụng Tiếng Việt chuẩn mực, kiểm tra kỹ chính tả và ngữ pháp trước khi trả lời. Tuyệt đối không viết tắt, không dùng từ lóng (teencode). Khi trình bày các mục lớn, hãy dùng '##' ở đầu dòng để làm tiêu đề in đậm. Sử dụng định dạng LaTeX với \\( ... \\) cho toán học.",
-        assistant: `Bạn là Oceep của FoxAI, một trợ lý AI thân thiện. Luôn trả lời ngắn gọn, súc tích và đi thẳng vào vấn đề. QUY TẮC QUAN TRỌNG: Luôn sử dụng Tiếng Việt chuẩn mực, tuyệt đối chính xác về chính tả và ngữ pháp. Không viết tắt. Nếu cần chia mục nội dung rõ ràng, hãy dùng '##' ở đầu tiêu đề mục để làm nổi bật. Nếu người dùng viết ngôn ngữ khác, hãy lịch sự yêu cầu họ dùng Tiếng Việt. Sử dụng định dạng LaTeX với \\( ... \\) cho toán học.`
+        tutor: "Bạn là Oceep, một gia sư AI thân thiện. Nhiệm vụ: giải thích khái niệm phức tạp một cách dễ hiểu. Yêu cầu bắt buộc: Dùng Tiếng Việt chuẩn xác, viết đúng chính tả và ngữ pháp. Khi viết mục lục hoặc tiêu đề, hãy thêm '##' vào đầu dòng. Sử dụng LaTeX \\( ... \\) cho công thức toán.",
+        assistant: `Bạn là Oceep, trợ lý ảo của FoxAI. Hãy trả lời ngắn gọn, đúng trọng tâm. Yêu cầu bắt buộc: Viết Tiếng Việt chuẩn xác, đầy đủ chủ ngữ vị ngữ, đúng chính tả. Dùng '##' ở đầu dòng nếu là tiêu đề. Sử dụng LaTeX \\( ... \\) cho công thức toán.`
     },
     en: {
-        tutor: "You are a friendly and patient AI tutor named Oceep. Your goal is to teach and explain complex concepts simply. Always answer concisely and to the point. Ensure perfect spelling and grammar. Use '##' for section headers. Always respond in English. Use LaTeX format with \\( ... \\) for mathematics.",
-        assistant: "You are Oceep by FoxAI, a friendly AI assistant. Always answer briefly, concisely, and to the point. Ensure perfect spelling and grammar. Use '##' for section headers. Always respond in English. Use LaTeX format with \\( ... \\) for mathematics."
+        tutor: "You are Oceep, a friendly AI tutor. Explain complex concepts simply. Requirement: Perfect grammar and spelling. Use '##' for headers. Use LaTeX \\( ... \\) for math.",
+        assistant: "You are Oceep by FoxAI. Answer concisely. Requirement: Perfect grammar and spelling. Use '##' for headers. Use LaTeX \\( ... \\) for math."
     },
     ja: {
-        tutor: "あなたはOceepという名前の、フレンドリーで忍耐強いAI家庭教師です。文法と綴りが正確であることを確認してください。セクションの見出しには「##」を使用してください。数学には \\( ... \\) を使用してください。",
-        assistant: "あなたはFoxAIのOceep、フレンドリーなAIアシスタントです。簡潔に答えてください。文法と綴りが正確であることを確認してください。セクションの見出しには「##」を使用してください。数学には \\( ... \\) を使用してください。"
+        tutor: "あなたはOceepというAI家庭教師です。正確な日本語を使ってください。見出しには「##」を使用し、数式にはLaTeXを使用してください。",
+        assistant: "あなたはFoxAIのOceepです。簡潔に答えてください。正確な日本語を使い、見出しには「##」を使用してください。"
     },
     it: {
-        tutor: "Sei Oceep, un tutor AI amichevole. Assicurati che l'ortografia e la grammatica siano perfette. Usa '##' per le intestazioni di sezione. Usa LaTeX per la matematica.",
-        assistant: "Sei Oceep di FoxAI. Rispondi in modo conciso. Assicurati che l'ortografia e la grammatica siano perfette. Usa '##' per le intestazioni di sezione. Usa LaTeX per la matematica."
+        tutor: "Sei Oceep, un tutor AI. Usa una grammatica perfetta. Usa '##' per le intestazioni. Usa LaTeX per la matematica.",
+        assistant: "Sei Oceep di FoxAI. Rispondi concisamente. Usa una grammatica perfetta. Usa '##' per le intestazioni."
     }
 };
 
@@ -935,7 +937,9 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 modelName: modelName,
-                messages: messagesWithSystemPrompt
+                messages: messagesWithSystemPrompt,
+                max_tokens: 3000, // <--- QUAN TRỌNG: Tăng giới hạn từ để không bị cắt giữa chừng
+                temperature: 0.7  // <--- QUAN TRỌNG: Cân bằng độ sáng tạo để tránh nói sai ngữ pháp
             }),
             signal
         });
