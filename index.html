@@ -4,148 +4,60 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Oceep by FoxAI</title>
-    <!-- Tích hợp Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Tích hợp Google Fonts (Inter) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Cấu hình MathJax để hiển thị công thức toán học -->
+    <!-- THÊM SCRIPT TURNSTILE VÀO ĐÂY -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
     <script>
       MathJax = {
-        tex: {
-          inlineMath: [['\\(', '\\)']],
-          displayMath: [['\\[', '\\]']]
-        }
+        tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }
       };
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            -ms-overflow-style: none; /* IE and Edge */
-            scrollbar-width: none; /* Firefox */
-        }
-        
-        /* Ẩn thanh cuộn nhưng vẫn cuộn được */
-       .hide-scrollbar {
-          overflow-y: auto;
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-        }
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .sidebar-scroll {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-        
-        /* Lớp phủ cho hình nền */
-        #background-container.image-overlay::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-
-        /* === Animations === */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px) scale(0.98); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes fadeOut {
-            from { opacity: 1; transform: translateY(0) scale(1); }
-            to { opacity: 0; transform: translateY(10px) scale(0.98); }
-        }
+        body { font-family: 'Inter', sans-serif; -ms-overflow-style: none; scrollbar-width: none; }
+        .hide-scrollbar { overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .sidebar-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        #background-container.image-overlay::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes fadeOut { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(10px) scale(0.98); } }
         .modal-fade-enter { animation: fadeIn 0.3s ease-out; }
         .modal-fade-leave { animation: fadeOut 0.3s ease-in; }
-
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-up {
-            animation: fadeUp 0.6s ease-out forwards;
-        }
-
-        @keyframes popIn {
-            0% { transform: scale(0.8); opacity: 0; }
-            80% { transform: scale(1.05); opacity: 1; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-        .animate-pop-in {
-            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-            transform-origin: bottom left;
-        }
-        .user-message .animate-pop-in {
-            transform-origin: bottom right;
-        }
-
-        /* Hiệu ứng con trỏ đang gõ (Streaming Cursor) */
-        .streaming::after {
-            content: '';
-            display: inline-block;
-            width: 0;
-            height: 1em;
-            border-right: 2px solid;
-            margin-left: 3px;
-            vertical-align: text-bottom;
-            animation: blink 1s infinite;
-        }
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0; }
-        }
-
-        /* Ẩn nút tăng giảm số trong input number */
-        input[type=number]::-webkit-inner-spin-button,
-        input[type=number]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        input[type=number] {
-            -moz-appearance: textfield;
-            appearance: textfield;
-        }
-
-        /* Hiệu ứng nút bấm */
-        .btn-interaction {
-            transition: transform 0.15s ease, box-shadow 0.2s ease;
-        }
-        .btn-interaction:hover {
-            transform: scale(1.05);
-        }
-        .btn-interaction:active {
-            transform: scale(0.95);
-            transition-duration: 0.05s;
-        }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-up { animation: fadeUp 0.6s ease-out forwards; }
+        @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 80% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+        .animate-pop-in { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; transform-origin: bottom left; }
+        .user-message .animate-pop-in { transform-origin: bottom right; }
+        .streaming::after { content: ''; display: inline-block; width: 0; height: 1em; border-right: 2px solid; margin-left: 3px; vertical-align: text-bottom; animation: blink 1s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+        .btn-interaction { transition: transform 0.15s ease, box-shadow 0.2s ease; }
+        .btn-interaction:hover { transform: scale(1.05); }
+        .btn-interaction:active { transform: scale(0.95); transition-duration: 0.05s; }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden transition-colors duration-500">
-    <!-- Container cho hình nền cố định -->
     <div id="background-container" class="fixed inset-0 -z-10 transition-all duration-500 bg-cover bg-center"></div>
     
-    <!-- Giao diện chính của ứng dụng -->
     <div id="app-container" class="flex h-full">
-        <!-- Sidebar -->
         <aside id="sidebar" class="w-64 bg-black/10 dark:bg-black/30 backdrop-blur-lg flex flex-col transition-all duration-300 -translate-x-full absolute lg:relative lg:translate-x-0 z-30 h-full hidden">
             <div class="p-4 flex justify-between items-center border-b border-white/10">
                 <h2 id="sidebar-header" class="font-bold text-lg">Lịch sử Chat</h2>
             </div>
-            <div id="history-list" class="flex-grow overflow-y-auto sidebar-scroll p-2 space-y-1">
-                <!-- Lịch sử sẽ được thêm vào đây bằng JS -->
-            </div>
+            <div id="history-list" class="flex-grow overflow-y-auto sidebar-scroll p-2 space-y-1"></div>
         </aside>
 
-        <!-- Main Content Area -->
         <div class="flex-1 flex flex-col h-full">
             <header class="p-4 flex justify-between items-center z-10">
                  <div class="flex items-center gap-4">
                     <div id="header-title" class="flex items-center text-xl font-semibold">
-                        <!-- Logo Icon -->
                         <svg id="original-icon" width="28" height="28" viewBox="0 0 100 100">
                             <defs>
                                 <radialGradient id="bubbleGradient" cx="0.3" cy="0.3" r="0.7">
@@ -159,7 +71,6 @@
                         <span id="logo-text" class="text-blue-400 text-2xl ml-0.5 font-semibold">ceep</span>
                     </div>
                     
-                     <!-- Left Controls -->
                     <div class="header-pill-container flex items-center gap-1 p-1 rounded-full">
                         <div class="relative group">
                             <button id="sidebar-toggle" type="button" class="w-10 h-10 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none rounded-full btn-interaction">
@@ -177,7 +88,6 @@
                 </div>
 
                 <div class="flex items-center gap-4">
-                    <!-- Token Display -->
                     <div id="token-display" class="flex items-center gap-1 text-sm font-semibold p-2 rounded-lg bg-gray-500/10">
                         <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" /></svg>
                         <div id="token-inputs-container" class="flex items-center">
@@ -188,7 +98,6 @@
                         <span id="token-infinity" class="hidden">∞</span>
                     </div>
 
-                    <!-- Right Controls (Lang/Theme) -->
                     <div class="header-pill-container flex items-center gap-1 p-1 rounded-full">
                         <div class="relative group">
                             <button id="lang-switch-btn" type="button" class="w-10 h-10 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none rounded-full text-sm font-semibold btn-interaction">VI</button>
@@ -205,10 +114,7 @@
             </header>
             
             <main id="mainContent" class="flex-grow flex flex-col p-4 transition-all duration-500 z-10 overflow-hidden">
-                <!-- Chat Container (Hidden initially) -->
                 <div id="chat-container" class="w-full max-w-3xl mx-auto flex-grow mb-4 overflow-y-auto hidden hide-scrollbar px-4"></div>
-                
-                <!-- Initial View (Welcome) -->
                 <div id="initial-view" class="flex-grow flex items-center justify-center text-center transition-opacity duration-500">
                      <div class="flex flex-col items-center">
                          <h1 id="main-title" class="text-5xl font-bold mb-4 opacity-0"></h1>
@@ -218,13 +124,16 @@
 
             <footer class="sticky bottom-0 left-0 right-0 bg-transparent pb-4 z-10">
                 <div class="w-full max-w-3xl mx-auto px-4">
-                    <form id="chat-form" class="relative flex flex-col bg-black/30 backdrop-blur-lg rounded-full shadow-lg p-1 border border-white/20">
+                    <form id="chat-form" class="relative flex flex-col bg-black/30 backdrop-blur-lg rounded-3xl shadow-lg p-1 border border-white/20">
                         <div id="file-thumbnail-container" class="px-2 pt-2"></div>
-                        <div class="flex items-start w-full">
+                        
+                        <!-- WIDGET CAPTCHA (TURNSTILE) ĐÃ ĐIỀN SITE KEY -->
+                        <div class="cf-turnstile px-4 pt-2 flex justify-center" data-sitekey="0x4AAAAAACCUDD5igGXk0HQK" data-theme="auto" data-size="flexible"></div>
+                        
+                        <div class="flex items-start w-full mt-1">
                             <input type="text" id="message-input" placeholder="Bạn muốn biết gì?" autocomplete="off" class="flex-grow bg-transparent border-none focus:ring-0 focus:outline-none text-lg pl-5 pt-3 pb-3 text-gray-200 placeholder-gray-500">
 
                             <div class="flex items-center shrink-0 pr-1 pt-1">
-                                <!-- Random Prompt -->
                                 <div class="relative group">
                                     <button type="button" id="random-prompt-icon-btn" class="p-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors btn-interaction hidden">
                                         <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -234,7 +143,6 @@
                                     <span id="random-tooltip" class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-2 py-1 bg-gray-900/80 backdrop-blur-sm text-white text-xs rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">Ngẫu nhiên</span>
                                 </div>
 
-                                <!-- Video Button -->
                                 <div class="relative group">
                                     <button type="button" id="video-icon-btn" class="p-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors btn-interaction">
                                         <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9A2.25 2.25 0 0 0 13.5 5.25h-9A2.25 2.25 0 0 0 2.25 7.5v9A2.25 2.25 0 0 0 4.5 18.75Z" /></svg>
@@ -242,7 +150,6 @@
                                     <span id="video-tooltip" class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-2 py-1 bg-gray-900/80 backdrop-blur-sm text-white text-xs rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">Tạo Video</span>
                                 </div>
 
-                                <!-- Learn Button -->
                                 <div class="relative group">
                                     <button type="button" id="learn-icon-btn" class="p-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors btn-interaction">
                                         <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.627 48.627 0 0 1 12 20.904a48.627 48.627 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.57 50.57 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.902 59.902 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5" /></svg>
@@ -250,13 +157,11 @@
                                      <span id="learn-tooltip" class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-2 py-1 bg-gray-900/80 backdrop-blur-sm text-white text-xs rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">Học Tập</span>
                                 </div>
 
-                                <!-- Upload Button -->
                                 <button type="button" id="upload-file-btn" class="p-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors btn-interaction">
                                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
                                 </button>
                                 <input type="file" id="file-input" class="hidden" accept="image/jpeg, image/png, image/webp">
 
-                                <!-- Model Select -->
                                 <div class="relative">
                                     <button type="button" id="model-button" class="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm text-gray-300 hover:bg-gray-700/50 transition btn-interaction">
                                         <span id="model-button-text-display">Mini</span>
@@ -264,12 +169,9 @@
                                            <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                                         </svg>
                                     </button>
-                                    <div id="model-popup" class="hidden absolute bottom-full right-0 mb-2 w-72 rounded-2xl p-2 shadow-lg transition bg-gray-900 border border-gray-700 space-y-1">
-                                       <!-- Nội dung model list sẽ được tạo bằng JS -->
-                                    </div>
+                                    <div id="model-popup" class="hidden absolute bottom-full right-0 mb-2 w-72 rounded-2xl p-2 shadow-lg transition bg-gray-900 border border-gray-700 space-y-1"></div>
                                 </div>
                                 
-                                <!-- Sound Wave Button (Inactive State) -->
                                 <button type="button" id="sound-wave-button" class="flex items-center justify-center w-11 h-11 bg-gray-200 text-gray-400 rounded-full transition-colors shrink-0 ml-1 btn-interaction">
                                     <svg class="w-6 h-6 -rotate-45" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2">
                                         <path d="M7.39999 6.32003L15.89 3.49003C19.7 2.22003 21.77 4.30003 20.51 8.11003L17.68 16.6C15.78 22.31 12.66 22.31 10.76 16.6L9.91999 14.08L7.39999 13.24C1.68999 11.34 1.68999 8.23003 7.39999 6.32003Z" stroke-linecap="round" stroke-linejoin="round"/>
@@ -277,7 +179,6 @@
                                     </svg>
                                 </button>
 
-                                <!-- Send Button (Active State) -->
                                 <button type="submit" id="send-button" class="hidden flex items-center justify-center w-11 h-11 bg-blue-600 text-white rounded-full transition-colors shrink-0 ml-1 btn-interaction">
                                    <svg class="w-6 h-6 -rotate-45 text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2">
                                         <path d="M7.39999 6.32003L15.89 3.49003C19.7 2.22003 21.77 4.30003 20.51 8.11003L17.68 16.6C15.78 22.31 12.66 22.31 10.76 16.6L9.91999 14.08L7.39999 13.24C1.68999 11.34 1.68999 8.23003 7.39999 6.32003Z" stroke-linecap="round" stroke-linejoin="round"/>
@@ -285,7 +186,6 @@
                                    </svg>
                                 </button>
 
-                                <!-- Stop Button (Streaming State) -->
                                 <button type="button" id="stop-button" class="hidden flex items-center justify-center w-11 h-11 bg-red-600 text-white rounded-full transition-colors shrink-0 ml-1 btn-interaction">
                                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 5h10v10H5z" /></svg>
                                 </button>
@@ -349,16 +249,15 @@
         <h2 class="text-2xl font-bold mb-4 text-center">Có gì mới?</h2>
         <div class="space-y-3 text-sm max-h-60 overflow-y-auto pr-2">
             <ul class="list-disc list-inside pl-2 space-y-1">
-                <li><strong>Sửa lỗi:</strong> Trả lời nhầm lẫn, giật lag.</li>
-                <li><strong>UI và UX:</strong> Cải thiện cho trải nghiệm tốt hơn</li>
-                <li><strong>Ngôn ngữ:</strong> 2 ngôn ngữ: Tiếng Nhật và Tiếng Ý</li>
+                <li><strong>Bảo mật:</strong> Thêm Captcha chống Spam.</li>
+                <li><strong>Sửa lỗi:</strong> Khắc phục lỗi cắt câu trả lời.</li>
                 <li><strong>Hệ thống Token:</strong> Tối ưu hóa việc hồi năng lượng.</li>
             </ul>
         </div>
         <div class="mt-6 flex items-center justify-between">
             <div class="flex items-center">
                 <input id="dont-show-again" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                <label for="dont-show-again" class="ml-2 block text-sm text-gray-600 dark:text-gray-300">Không hiện lại cho đến cập nhật tiếp</label>
+                <label for="dont-show-again" class="ml-2 block text-sm text-gray-600 dark:text-gray-300">Không hiện lại</label>
             </div>
             <button id="close-update-log" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors btn-interaction">Đóng</button>
         </div>
@@ -380,8 +279,6 @@
     </div>
 </div>
 
-<!-- Script chính -->
 <script src="script.js"></script>
-
 </body>
 </html>
