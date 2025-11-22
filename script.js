@@ -112,7 +112,6 @@ const textElements = {
     newChatTooltip: document.getElementById('new-chat-tooltip'),
 };
 
-// ... (Theme colors and basic functions stay the same) ...
 const themeColors = {
     dark: { bg: ['bg-gradient-to-br', 'from-[#212935]', 'to-black'], text: 'text-gray-100', subtleText: 'text-gray-400', logo: 'text-gray-100', iconColor: 'text-gray-300', popup: ['bg-gray-900', 'border', 'border-gray-700'], popupButton: ['text-gray-300', 'hover:bg-white/10', 'hover:text-white'], popupSelected: ['bg-sky-500/20', '!text-sky-300', 'font-semibold'], sidebar: ['bg-black/10', 'border-white/10'], sidebarText: 'text-gray-200', historyActive: ['bg-blue-800/50'], historyHover: ['hover:bg-blue-800/30'], form: ['bg-black/30', 'border-white/20'], headerPill: [], aiMessage: ['text-gray-100'], userMessage: ['bg-blue-600', 'text-white'], inputColor: ['text-gray-200', 'placeholder-gray-500'] },
     light: { bg: ['bg-white'], text: 'text-black', subtleText: 'text-gray-600', logo: 'text-blue-500', iconColor: 'text-gray-800', popup: ['bg-white', 'border', 'border-gray-200', 'shadow-lg'], popupButton: ['text-gray-700', 'hover:bg-gray-100'], popupSelected: ['bg-blue-100', '!text-blue-600', 'font-semibold'], sidebar: ['bg-gray-50', 'border-r', 'border-gray-200'], sidebarText: 'text-black', historyActive: ['bg-blue-100'], historyHover: ['hover:bg-gray-200'], form: ['bg-gray-100', 'border', 'border-gray-300', 'shadow'], headerPill: [], aiMessage: ['text-black'], userMessage: ['bg-blue-500', 'text-white'], inputColor: ['text-black', 'placeholder-gray-400'] },
@@ -408,7 +407,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function handleUpdateLog() {
     const updateLogModal = document.getElementById('update-log-modal');
-    const version = '1.0.3'; // Incremented version
+    const version = '1.0.3';
     if (localStorage.getItem('seenUpdateLogVersion') !== version) showModal(updateLogModal, true);
     const close = () => {
         if (document.getElementById('dont-show-again').checked) localStorage.setItem('seenUpdateLogVersion', version);
@@ -563,12 +562,13 @@ const systemPrompts = {
     it: { tutor: "Sei Oceep. Grammatica perfetta. Usa '##' per intestazioni. LaTeX per matematica.", assistant: "Sei Oceep. Conciso. Grammatica perfetta. Usa '##' per intestazioni. LaTeX per matematica." }
 };
 
-async function streamAIResponse(modelName, messages, aiMessageEl, signal, token) {
+// --- MAIN AI FUNCTION (NO CAPTCHA) ---
+async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const langPrompts = systemPrompts[currentLang] || systemPrompts['en'];
     const systemMsg = { role: 'system', content: isTutorMode ? langPrompts.tutor : langPrompts.assistant };
     const fullMsgs = [systemMsg, ...messages];
     
-    // --- CLOUDFLARE CONFIG ---
+    // --- CONFIG ---
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
     const CLOUDFLARE_PROJECT_URL = ''; // Điền URL nếu test local
     const API_URL = (isLocal && CLOUDFLARE_PROJECT_URL) ? `${CLOUDFLARE_PROJECT_URL}/api/handler` : '/api/handler';
@@ -578,8 +578,7 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal, token)
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                modelName, messages: fullMsgs, max_tokens: 4000, temperature: 0.7,
-                token: token // Gửi Captcha Token
+                modelName, messages: fullMsgs, max_tokens: 4000, temperature: 0.7
             }),
             signal
         });
@@ -620,8 +619,7 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal, token)
     } catch (error) {
         if (error.name === 'AbortError') return aiMessageEl.firstChild.innerText;
         let msg = "Lỗi kết nối.";
-        if (error.message.includes('403')) msg = "Xác thực Captcha thất bại.";
-        else if (error.message.includes('404')) msg = "Không tìm thấy API.";
+        if (error.message.includes('404')) msg = "Không tìm thấy API.";
         else msg = `Lỗi: ${error.message}`;
         aiMessageEl.firstChild.innerHTML = `<span class="text-red-400">${msg}</span>`;
         throw error;
@@ -631,12 +629,6 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal, token)
 chatForm.addEventListener('submit', async function(event) {
     event.preventDefault();
     
-    // --- CAPTCHA CHECK ---
-    const formData = new FormData(chatForm);
-    const token = formData.get('cf-turnstile-response');
-    if (!token) { alert("Vui lòng xác thực bạn không phải là Robot!"); return; }
-    // ---------------------
-
     const message = messageInput.value.trim();
     if (!message && !stagedFile) return;
     if (!consumeToken()) return;
@@ -664,9 +656,6 @@ chatForm.addEventListener('submit', async function(event) {
     isRandomPromptUsedInSession = true;
     updateRandomButtonVisibility();
     
-    // Reset Captcha sau khi gửi (để bắt xác thực lại cho lần sau nếu muốn, hoặc để đó)
-    try { turnstile.reset(); } catch(e) {}
-
     const aiMessageEl = createMessageElement('', 'ai');
     aiMessageEl.firstChild.classList.add('streaming');
     chatContainer.appendChild(aiMessageEl);
@@ -680,7 +669,7 @@ chatForm.addEventListener('submit', async function(event) {
     abortController = new AbortController();
 
     try {
-        const fullAiResponse = await streamAIResponse((currentModel && currentModel.model) || 'Mini', conversationHistory, aiMessageEl, abortController.signal, token);
+        const fullAiResponse = await streamAIResponse((currentModel && currentModel.model) || 'Mini', conversationHistory, aiMessageEl, abortController.signal);
         conversationHistory.push({ role: 'assistant', content: fullAiResponse });
         saveStateToLocalStorage();
     } catch (error) { } 
