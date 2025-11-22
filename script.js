@@ -912,7 +912,7 @@ const systemPrompts = {
 };
 
 // ============================================================
-// MAIN FIX FOR CONNECTION AND STREAMING ERRORS
+// MAIN FIX FOR CONNECTION AND STREAMING ERRORS (Cloudflare Version)
 // ============================================================
 async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const langPrompts = systemPrompts[currentLang] || systemPrompts['en'];
@@ -920,14 +920,21 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const systemMessage = { role: 'system', content: systemContent };
     const messagesWithSystemPrompt = [systemMessage, ...messages];
     
-    // --- URL CONFIGURATION FIX ---
-    const LIVE_DOMAIN = 'https://official-oceeps-projects.vercel.app'; // CẬP NHẬT DOMAIN MỚI
+    // --- URL CONFIGURATION FOR CLOUDFLARE ---
+    // Khi deploy lên Cloudflare Pages, file script.js sẽ gọi về cùng domain (/api/handler)
+    // Nếu chạy Localhost, bạn cần điền URL của dự án Cloudflare Pages vào biến bên dưới.
+    
     const isLocal = window.location.hostname === 'localhost' || 
                     window.location.hostname === '127.0.0.1' ||
                     window.location.protocol === 'file:';
 
-    // Nếu là local, dùng full URL. Nếu là production, dùng relative path để tránh lỗi CORS.
-    const API_URL = isLocal ? `${LIVE_DOMAIN}/api/handler` : '/api/handler';
+    // ⚠️ NẾU TEST LOCAL: Điền URL Cloudflare Pages của bạn vào đây (ví dụ: 'https://oceep-chat.pages.dev')
+    // Nếu đã Deploy lên mạng thì để trống cũng được.
+    const CLOUDFLARE_PROJECT_URL = ''; 
+
+    const API_URL = isLocal && CLOUDFLARE_PROJECT_URL 
+        ? `${CLOUDFLARE_PROJECT_URL}/api/handler` 
+        : '/api/handler';
 
     console.log(`[System] Requesting: ${modelName} via ${API_URL}`);
 
@@ -938,13 +945,12 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
             body: JSON.stringify({
                 modelName: modelName,
                 messages: messagesWithSystemPrompt,
-                max_tokens: 25000, // <--- QUAN TRỌNG: Tăng giới hạn từ để không bị cắt giữa chừng
-                temperature: 1  // <--- QUAN TRỌNG: Cân bằng độ sáng tạo để tránh nói sai ngữ pháp
+                max_tokens: 4000, // Tăng giới hạn token lên cao để không bị cắt chữ
+                temperature: 0.7  // Cân bằng độ sáng tạo
             }),
             signal
         });
 
-        // --- ERROR HANDLING FIX ---
         if (!response.ok) {
             let errorMsg = `Server Error (${response.status})`;
             try {
@@ -981,7 +987,12 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
                         if (content) {
                             fullResponseText += content;
                             aiMessageEl.firstChild.innerHTML = formatAIResponse(fullResponseText);
-                            chatContainer.scrollTop = chatContainer.scrollHeight;
+                            
+                            // Auto-scroll xuống dưới cùng khi đang viết
+                            const chatContainer = document.getElementById('chat-container');
+                            if(chatContainer) {
+                                chatContainer.scrollTop = chatContainer.scrollHeight;
+                            }
                         }
                     } catch (e) { }
                 }
@@ -994,16 +1005,14 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
         
         console.error("Connection Error Details:", error);
         
-        let userMsg = "An error occurred.";
+        let userMsg = "Đã có lỗi xảy ra.";
         
         if (error.message.includes('Failed to fetch')) {
              userMsg = isLocal 
-                ? "Lỗi kết nối (CORS/Mạng). Hãy đảm bảo API đang chạy." 
+                ? "Lỗi kết nối. Nếu bạn đang chạy Local, hãy điền URL Cloudflare Pages vào biến CLOUDFLARE_PROJECT_URL trong script.js." 
                 : "Không thể kết nối đến Server. Vui lòng kiểm tra lại đường truyền.";
         } else if (error.message.includes('404')) {
-            userMsg = "Lỗi 404: Không tìm thấy API. Hãy đảm bảo file 'handler.js' nằm trong thư mục 'api'.";
-        } else if (error.message.includes('401')) {
-            userMsg = "Lỗi xác thực (401). Vui lòng kiểm tra API Key trên Vercel.";
+            userMsg = "Lỗi 404: Không tìm thấy API. Hãy đảm bảo bạn đã deploy code lên Cloudflare Pages đúng cấu trúc (functions/api/handler.js).";
         } else {
             userMsg = `Lỗi: ${error.message}`;
         }
