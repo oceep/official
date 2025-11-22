@@ -5,12 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Oceep by FoxAI</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- THÊM SCRIPT TURNSTILE VÀO ĐÂY -->
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <!-- Đã xóa script Turnstile -->
 
     <script>
       MathJax = {
@@ -127,8 +124,7 @@
                     <form id="chat-form" class="relative flex flex-col bg-black/30 backdrop-blur-lg rounded-3xl shadow-lg p-1 border border-white/20">
                         <div id="file-thumbnail-container" class="px-2 pt-2"></div>
                         
-                        <!-- WIDGET CAPTCHA (TURNSTILE) ĐÃ ĐIỀN SITE KEY -->
-                        <div class="cf-turnstile px-4 pt-2 flex justify-center" data-sitekey="0x4AAAAAACCUDD5igGXk0HQK" data-theme="auto" data-size="flexible"></div>
+                        <!-- ĐÃ XÓA WIDGET CAPTCHA Ở ĐÂY -->
                         
                         <div class="flex items-start w-full mt-1">
                             <input type="text" id="message-input" placeholder="Bạn muốn biết gì?" autocomplete="off" class="flex-grow bg-transparent border-none focus:ring-0 focus:outline-none text-lg pl-5 pt-3 pb-3 text-gray-200 placeholder-gray-500">
@@ -199,6 +195,7 @@
 </div>
 
 <!-- Theme Modal -->
+<!-- (GIỮ NGUYÊN PHẦN MODAL NHƯ CŨ) -->
 <div id="theme-modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
     <div id="modal-content" class="bg-white/90 backdrop-blur-lg dark:bg-black/80 rounded-2xl shadow-2xl p-6 w-full max-w-2xl border border-gray-300 dark:border-white/20">
         <h2 id="theme-modal-title" class="text-xl font-bold mb-5 text-gray-800 dark:text-white text-center">Chọn Giao Diện</h2>
@@ -225,7 +222,6 @@
     </div>
 </div>
 
-<!-- Language Modal -->
 <div id="language-modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
     <div id="language-modal-content" class="modal-fade-enter bg-white/90 backdrop-blur-lg dark:bg-black/80 rounded-2xl shadow-2xl p-6 w-full max-w-md border border-gray-300 dark:border-white/20">
         <h2 id="language-modal-title" class="text-xl font-bold mb-5 text-gray-800 dark:text-white text-center">Chọn Ngôn Ngữ</h2>
@@ -243,13 +239,12 @@
     </div>
 </div>
 
-<!-- Update Log Modal -->
 <div id="update-log-modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
     <div id="update-log-content" class="modal-fade-enter bg-white/90 backdrop-blur-lg dark:bg-gray-800/90 rounded-2xl shadow-2xl p-6 w-full max-w-md border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-white">
         <h2 class="text-2xl font-bold mb-4 text-center">Có gì mới?</h2>
         <div class="space-y-3 text-sm max-h-60 overflow-y-auto pr-2">
             <ul class="list-disc list-inside pl-2 space-y-1">
-                <li><strong>Bảo mật:</strong> Thêm Captcha chống Spam.</li>
+                <li><strong>Bảo mật:</strong> Đã kích hoạt kiểm tra trình duyệt (Managed Challenge).</li>
                 <li><strong>Sửa lỗi:</strong> Khắc phục lỗi cắt câu trả lời.</li>
                 <li><strong>Hệ thống Token:</strong> Tối ưu hóa việc hồi năng lượng.</li>
             </ul>
@@ -264,7 +259,6 @@
     </div>
 </div>
 
-<!-- Coming Soon Modal -->
 <div id="coming-soon-modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
     <div id="coming-soon-content" class="modal-fade-enter bg-black/80 backdrop-blur-lg rounded-2xl shadow-2xl p-8 w-full max-w-sm border border-white/20 flex flex-col items-center gap-4">
         <svg class="w-24 h-24" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
