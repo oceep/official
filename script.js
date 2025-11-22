@@ -945,8 +945,8 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
             body: JSON.stringify({
                 modelName: modelName,
                 messages: messagesWithSystemPrompt,
-                max_tokens: 25000, // Tăng giới hạn token lên cao để không bị cắt chữ
-                temperature: 1  // Cân bằng độ sáng tạo
+                max_tokens: 4000, // Tăng giới hạn token lên cao để không bị cắt chữ
+                temperature: 0.7  // Cân bằng độ sáng tạo
             }),
             signal
         });
