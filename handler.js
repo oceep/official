@@ -1,44 +1,38 @@
-// Cấu hình cho các model và tên tệp model tương ứng trên OpenRouter
+// File này BẮT BUỘC phải nằm trong thư mục: api/handler.js
+
 const apiConfig = {
     'Mini': {
-        key: process.env.MINI_API_KEY, // Lấy key từ biến môi trường
+        key: process.env.MINI_API_KEY,
         model: 'openai/gpt-oss-20b:free'
     },
     'Smart': {
-        key: process.env.SMART_API_KEY, // Lấy key từ biến môi trường
+        key: process.env.SMART_API_KEY,
         model: 'kwaipilot/kat-coder-pro:free'
     },
     'Nerd': {
-        key: process.env.NERD_API_KEY, // Lấy key từ biến môi trường
+        key: process.env.NERD_API_KEY,
         model: 'x-ai/grok-4.1-fast:free'
     }
 };
 
-// Cấu hình để Vercel hiểu đây là một Edge Function để xử lý streaming
 export const config = {
     runtime: 'edge',
 };
 
-// Hàm helper để tạo response với CORS headers
 function corsResponse(body, init = {}) {
     const headers = new Headers(init.headers || {});
-    
-    // Thêm CORS headers - QUAN TRỌNG!
-    headers.set('Access-Control-Allow-Origin', '*'); // Hoặc chỉ định domain cụ thể của bạn
+    headers.set('Access-Control-Allow-Origin', '*');
     headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     
     return new Response(body, { ...init, headers });
 }
 
-// Hàm chính xử lý request
 export default async function handler(req) {
-    // Xử lý preflight request (OPTIONS) - Browsers gửi trước khi POST
     if (req.method === 'OPTIONS') {
         return corsResponse(null, { status: 204 });
     }
 
-    // Chỉ cho phép phương thức POST
     if (req.method !== 'POST') {
         return corsResponse(
             JSON.stringify({ error: 'Method not allowed' }), 
@@ -52,12 +46,11 @@ export default async function handler(req) {
     try {
         const { modelName, messages } = await req.json();
 
-        // Lấy thông tin cấu hình cho model được yêu cầu
         const config = apiConfig[modelName];
         if (!config || !config.key) {
             return corsResponse(
                 JSON.stringify({ 
-                    error: `Configuration or API key for model '${modelName}' not found.` 
+                    error: `API Key hoặc cấu hình cho model '${modelName}' chưa được cài đặt trên Server.` 
                 }), 
                 { 
                     status: 400,
@@ -68,30 +61,26 @@ export default async function handler(req) {
 
         const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-        // Gọi đến API của OpenRouter
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${config.key}`,
-                // Các header này có thể cần thiết để OpenRouter xác thực
-                'HTTP-Referer': 'https://official-virid.vercel.app/', // Thay bằng domain của bạn
-                'X-Title': 'Oceep' // Thay bằng tên app của bạn
+                'HTTP-Referer': 'https://official-oceeps-projects.vercel.app/',
+                'X-Title': 'Oceep'
             },
             body: JSON.stringify({
                 model: config.model,
                 messages: messages,
-                stream: true // Luôn bật stream
+                stream: true
             }),
         });
 
-        // Kiểm tra nếu API của OpenRouter trả về lỗi
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('OpenRouter API Error:', errorText);
             return corsResponse(
                 JSON.stringify({ 
-                    error: 'Failed to fetch from OpenRouter API.', 
+                    error: 'Lỗi từ OpenRouter API.', 
                     details: errorText 
                 }), 
                 { 
@@ -101,7 +90,6 @@ export default async function handler(req) {
             );
         }
         
-        // Trả về luồng (stream) dữ liệu trực tiếp cho client với CORS headers
         return corsResponse(response.body, {
             headers: {
                 'Content-Type': 'text/event-stream',
@@ -113,7 +101,7 @@ export default async function handler(req) {
         console.error('Error in handler:', error);
         return corsResponse(
             JSON.stringify({ 
-                error: 'An internal server error occurred.', 
+                error: 'Lỗi Server nội bộ.', 
                 details: error.message 
             }), 
             { 
