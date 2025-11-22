@@ -908,11 +908,13 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const systemMessage = { role: 'system', content: systemContent };
     const messagesWithSystemPrompt = [systemMessage, ...messages];
     
-    const LIVE_DOMAIN = 'https://official-virid.vercel.app';
+    // --- URL CONFIGURATION FIX ---
+    const LIVE_DOMAIN = 'https://official-oceeps-projects.vercel.app'; // CẬP NHẬT DOMAIN MỚI
     const isLocal = window.location.hostname === 'localhost' || 
                     window.location.hostname === '127.0.0.1' ||
                     window.location.protocol === 'file:';
 
+    // Nếu là local, dùng full URL. Nếu là production, dùng relative path để tránh lỗi CORS.
     const API_URL = isLocal ? `${LIVE_DOMAIN}/api/handler` : '/api/handler';
 
     console.log(`[System] Requesting: ${modelName} via ${API_URL}`);
@@ -932,7 +934,6 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
         if (!response.ok) {
             let errorMsg = `Server Error (${response.status})`;
             try {
-                // Read text ONLY ONCE to avoid "body stream already read"
                 const errorBody = await response.text(); 
                 try {
                     const errorData = JSON.parse(errorBody);
@@ -983,8 +984,12 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
         
         if (error.message.includes('Failed to fetch')) {
              userMsg = isLocal 
-                ? "Lỗi kết nối (CORS/Mạng). Hãy đảm bảo Project Vercel đã Redeploy sau khi thêm API Key." 
-                : "Không thể kết nối đến Server. Vui lòng thử lại sau.";
+                ? "Lỗi kết nối (CORS/Mạng). Hãy đảm bảo API đang chạy." 
+                : "Không thể kết nối đến Server. Vui lòng kiểm tra lại đường truyền.";
+        } else if (error.message.includes('404')) {
+            userMsg = "Lỗi 404: Không tìm thấy API. Hãy đảm bảo file 'handler.js' nằm trong thư mục 'api'.";
+        } else if (error.message.includes('401')) {
+            userMsg = "Lỗi xác thực (401). Vui lòng kiểm tra API Key trên Vercel.";
         } else {
             userMsg = `Lỗi: ${error.message}`;
         }
