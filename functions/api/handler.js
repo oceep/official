@@ -24,7 +24,7 @@ export async function onRequestPost(context) {
         const apiConfig = {
             'Mini': {
                 key: env.MINI_API_KEY,
-                model: 'openai/gpt-oss-20b:free' // Hoặc model bạn muốn
+                model: 'deepseek/deepseek-r1:free'
             },
             'Smart': {
                 key: env.SMART_API_KEY,
@@ -32,7 +32,7 @@ export async function onRequestPost(context) {
             },
             'Nerd': {
                 key: env.NERD_API_KEY,
-                model: 'x-ai/grok-4.1-fast:free'
+                model: 'x-ai/grok-4.1-fast'
             }
         };
 
