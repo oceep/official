@@ -1,6 +1,6 @@
 //=====================================================================//
 // NEW: ENERGY CONFIGURATION BOX                                       //
-// Dễ dàng điều chỉnh các thông số Năng lượng tại đây.                    //
+// Dễ dàng điều chỉnh các thông số Năng lượng tại đây.                 //
 //=====================================================================//
 const tokenConfig = {
     IS_INFINITE: true,
@@ -539,6 +539,37 @@ function setActiveHistoryItem(chatId) {
 newChatHeaderBtn.addEventListener('click', startNewChat);
 
 document.addEventListener('DOMContentLoaded', () => {
+    
+    // ==========================================
+    // BẢO MẬT: KIỂM TRA SỐ LẦN SỬ DỤNG
+    // ==========================================
+    function checkSecurityGate() {
+        // Lấy số lần đã dùng từ bộ nhớ
+        let usageCount = parseInt(localStorage.getItem('appUsageCount') || '0');
+        
+        // Tăng số lần dùng lên 1
+        usageCount++;
+        
+        console.log("Số lần dùng: " + usageCount);
+
+        // Nếu dùng >= 5 lần thì chặn lại và bắt verify
+        if (usageCount >= 5) {
+            // Lưu lại số lần (để nếu back lại vẫn bị chặn)
+            localStorage.setItem('appUsageCount', usageCount);
+            // Chuyển hướng sang trang verify
+            window.location.href = 'verify.html';
+        } else {
+            // Nếu chưa đến 5 lần thì lưu số mới và cho dùng tiếp
+            localStorage.setItem('appUsageCount', usageCount);
+        }
+    }
+
+    // Chạy kiểm tra ngay khi vào App
+    checkSecurityGate();
+    // ==========================================
+    // KẾT THÚC PHẦN BẢO MẬT
+    // ==========================================
+
     const savedTheme = localStorage.getItem('theme') || 'dark';
     const savedLang = localStorage.getItem('language') || 'vi';
     
