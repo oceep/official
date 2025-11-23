@@ -7,24 +7,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- CẤU HÌNH MATHJAX MỚI (Hỗ trợ $ và $$ tự động) -->
-    <script>
-      window.MathJax = {
-        tex: {
-          // Thêm dấu '$' và '$$' vào danh sách nhận diện
-          inlineMath: [['$', '$'], ['\\(', '\\)']], 
-          displayMath: [['$$', '$$'], ['\\[', '\\]']],
-          processEscapes: true, // Cho phép dùng \$ để hiển thị dấu $ tiền tệ
-        },
-        svg: {
-          fontCache: 'global'
-        },
-        options: {
-          enableMenu: false 
-        }
-      };
-    </script>
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <!-- THAY ĐỔI: Dùng KaTeX thay vì MathJax để bôi đen/copy mượt mà -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
     <style>
         body { font-family: 'Inter', sans-serif; -ms-overflow-style: none; scrollbar-width: none; }
@@ -48,6 +34,10 @@
         .btn-interaction { transition: transform 0.15s ease, box-shadow 0.2s ease; }
         .btn-interaction:hover { transform: scale(1.05); }
         .btn-interaction:active { transform: scale(0.95); transition-duration: 0.05s; }
+        
+        /* KaTeX Font Fix & Selection Fix */
+        .katex { font-size: 1.1em; }
+        .katex * { user-select: text !important; } /* Bắt buộc cho phép copy */
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden transition-colors duration-500">
@@ -250,9 +240,9 @@
         <h2 class="text-2xl font-bold mb-4 text-center">Có gì mới?</h2>
         <div class="space-y-3 text-sm max-h-60 overflow-y-auto pr-2">
             <ul class="list-disc list-inside pl-2 space-y-1">
-                <li><strong>Toán học:</strong> Tự động hiển thị công thức (MathJax) khi AI trả lời.</li>
+                <li><strong>Toán học:</strong> Đã chuyển sang <strong>KaTeX</strong> giúp bôi đen và copy công thức mượt mà.</li>
                 <li><strong>Bảo mật:</strong> Đã kích hoạt kiểm tra trình duyệt (Managed Challenge).</li>
-                <li><strong>Sửa lỗi:</strong> Khắc phục lỗi cắt câu trả lời.</li>
+                <li><strong>Sửa lỗi:</strong> Khắc phục lỗi hiển thị.</li>
             </ul>
         </div>
         <div class="mt-6 flex items-center justify-between">
