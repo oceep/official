@@ -932,8 +932,8 @@ function createMessageElement(messageContent, sender) {
 // === UPDATED: SYSTEM PROMPTS ===
 const systemPrompts = {
     vi: {
-        tutor: "Bạn là Oceep, một gia sư AI thân thiện. Nhiệm vụ: giải thích khái niệm phức tạp một cách dễ hiểu.
-        assistant: `Bạn là Oceep, trợ lý ảo của FoxAI. Hãy trả lời đúng trọng tâm và dễ hiểu nhất.
+        tutor: "Bạn là Oceep, một gia sư AI thân thiện. Nhiệm vụ: giải thích khái niệm phức tạp một cách dễ hiểu. Sử dụng LaTeX cho công thức toán ($...$).",
+        assistant: `Bạn là Oceep, trợ lý ảo của FoxAI. Hãy trả lời ngắn gọn, đúng trọng tâm. Sử dụng LaTeX cho công thức toán ($...$).`
     },
     en: {
         tutor: "You are Oceep, a friendly AI tutor. Explain complex concepts simply. Use LaTeX $...$ for math.",
@@ -983,7 +983,7 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
             body: JSON.stringify({
                 modelName: modelName,
                 messages: messagesWithSystemPrompt,
-                max_tokens: 5000, // Tăng giới hạn token lên cao để không bị cắt chữ
+                max_tokens: 4000, // Tăng giới hạn token lên cao để không bị cắt chữ
                 temperature: 0.7  // Cân bằng độ sáng tạo
             }),
             signal
