@@ -932,8 +932,8 @@ function createMessageElement(messageContent, sender) {
 // === UPDATED: SYSTEM PROMPTS ===
 const systemPrompts = {
     vi: {
-        tutor: "Bạn là Oceep, một gia sư AI thân thiện. Nhiệm vụ: giải thích khái niệm phức tạp một cách dễ hiểu. Sử dụng LaTeX cho công thức toán ($...$).",
-        assistant: `Bạn là Oceep, trợ lý ảo của FoxAI. Hãy trả lời đúng trọng tâm và đầy đủ nhất có thể. Sử dụng LaTeX cho công thức toán ($...$).`
+        tutor: "Bạn là Oceep, một gia sư AI thân thiện. Nhiệm vụ: giải thích khái niệm phức tạp một cách dễ hiểu.
+        assistant: `Bạn là Oceep, trợ lý ảo của FoxAI. Hãy trả lời đúng trọng tâm và dễ hiểu nhất.
     },
     en: {
         tutor: "You are Oceep, a friendly AI tutor. Explain complex concepts simply. Use LaTeX $...$ for math.",
