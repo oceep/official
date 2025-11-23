@@ -1,1160 +1,364 @@
-//=====================================================================//
-// NEW: ENERGY CONFIGURATION BOX                                       //
-// Dễ dàng điều chỉnh các thông số Năng lượng tại đây.                 //
-//=====================================================================//
-const tokenConfig = {
-    IS_INFINITE: true,
+// =====================================================================
+// CẤU HÌNH HỆ THỐNG
+// =====================================================================
+const config = {
+    IS_INFINITE: true,           // true: Dùng vô hạn, false: Tính token
     MAX_TOKENS: 50,
-    TOKEN_COST_PER_MESSAGE: 1,
-    TOKEN_REGEN_INTERVAL_MINUTES: 5,
-    TOKEN_REGEN_AMOUNT: 1,
+    TOKEN_COST: 1,
+    LANG_DEFAULT: 'vi',
+    THEME_DEFAULT: 'dark',
+    MODELS: [
+        { id: 'Mini', name: 'Mini', desc: 'Nhanh & Hiệu quả', icon: '<path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" />' },
+        { id: 'Smart', name: 'Smart', desc: 'Cân bằng', icon: '<path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/>' },
+        { id: 'Nerd', name: 'Expert', desc: 'Thông minh nhất', icon: '<path d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/>' }
+    ]
 };
-//=====================================================================//
 
-// --- DOM ELEMENTS ---
-const themeMenuButton = document.getElementById('theme-menu-button');
-const themeModal = document.getElementById('theme-modal');
-const modalContent = document.getElementById('modal-content');
-const closeModalButton = document.getElementById('close-modal-button');
-const themeOptionButtons = document.querySelectorAll('.theme-option');
-const languageModal = document.getElementById('language-modal');
-const closeLanguageModalBtn = document.getElementById('close-language-modal-button');
-const languageOptionButtons = document.querySelectorAll('.language-option');
+// =====================================================================
+// PROMPTS (Cấu hình hành vi AI)
+// =====================================================================
+const coreInstructions = `
+Quy tắc (TUÂN THỦ 100%):
+1. **Toán học:** Dùng LaTeX chuẩn.
+   - Inline: $...$
+   - Block: $$...$$
+   - KHÔNG DÙNG: \\(..\\) hoặc \\[..\\]
+2. **Format:** Markdown (In đậm, List).
+`;
 
-const body = document.body;
-const backgroundContainer = document.getElementById('background-container');
-const chatFormEl = document.getElementById('chat-form');
-const oceanImageUrl = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1173&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
+const systemPrompts = {
+    vi: { tutor: `Bạn là Oceep (Gia Sư). Hãy giải thích bản chất, gợi mở tư duy, dùng ví dụ thực tế.\n${coreInstructions}`, assistant: `Bạn là Oceep (Trợ Lý). Trả lời ngắn gọn, chính xác, trực diện.\n${coreInstructions}` },
+    en: { tutor: `You are Oceep (Tutor). Explain concepts deeply using Socratic method.\n${coreInstructions}`, assistant: `You are Oceep (Assistant). Be precise and concise.\n${coreInstructions}` }
+};
 
-const appContainer = document.getElementById('app-container');
-const sidebar = document.getElementById('sidebar');
-const sidebarToggle = document.getElementById('sidebar-toggle');
-const historyList = document.getElementById('history-list');
-const newChatHeaderBtn = document.getElementById('new-chat-header-btn');
-const langSwitchBtn = document.getElementById('lang-switch-btn');
-const sendButton = document.getElementById('send-button');
-const soundWaveButton = document.getElementById('sound-wave-button');
-const stopButton = document.getElementById('stop-button');
-const messageInput = document.getElementById('message-input');
-const randomPromptBtn = document.getElementById('random-prompt-icon-btn');
-const comingSoonModal = document.getElementById('coming-soon-modal');
-const closeComingSoonModal = document.getElementById('close-coming-soon-modal');
+// =====================================================================
+// KHỞI TẠO DOM ELEMENTS
+// =====================================================================
+const $ = (id) => document.getElementById(id);
+const dom = {
+    chatForm: $('chat-form'),
+    msgInput: $('message-input'),
+    chatBox: $('chat-container'),
+    initialView: $('initial-view'),
+    fileInput: $('file-input'),
+    fileThumb: $('file-thumbnail-container'),
+    mainTitle: $('main-title'),
+    themeModal: $('theme-modal'),
+    langModal: $('language-modal'),
+    sidebar: $('sidebar'),
+    btns: {
+        send: $('send-button'), stop: $('stop-button'), sound: $('sound-wave-button'),
+        theme: $('theme-menu-button'), lang: $('lang-switch-btn'), newChat: $('new-chat-header-btn'),
+        toggleSide: $('sidebar-toggle'), random: $('random-prompt-icon-btn'),
+        upload: $('upload-file-btn'), video: $('video-icon-btn'), learn: $('learn-icon-btn'), model: $('model-button')
+    }
+};
 
-// File upload elements
-const uploadFileBtn = document.getElementById('upload-file-btn');
-const fileInput = document.getElementById('file-input');
-const fileThumbnailContainer = document.getElementById('file-thumbnail-container');
+// State Variables
+let currentModel = JSON.parse(localStorage.getItem('currentModel')) || config.MODELS[0];
+let currentLang = localStorage.getItem('language') || config.LANG_DEFAULT;
+let isTutorMode = localStorage.getItem('isTutorMode') === 'true';
+let chatHistories = JSON.parse(localStorage.getItem('chatHistories')) || {};
+let currentChatId = null;
+let conversationHistory = [];
+let abortController;
 let stagedFile = null;
 
-// Token management elements
-const tokenInputsContainer = document.getElementById('token-inputs-container');
-const currentTokenInput = document.getElementById('current-token-input');
-const maxTokenInput = document.getElementById('max-token-input');
-const tokenInfinity = document.getElementById('token-infinity');
+// =====================================================================
+// XỬ LÝ SỰ KIỆN CHÍNH (SỬA LỖI REFRESH)
+// =====================================================================
 
-// Additional Buttons (Fixing missing variables from previous attempt)
-const videoBtn = document.getElementById('video-icon-btn');
-const learnBtn = document.getElementById('learn-icon-btn');
-const modelButton = document.getElementById('model-button');
-const modelPopup = document.getElementById('model-popup');
+// Hàm xử lý gửi tin nhắn duy nhất
+const handleSubmit = async (e) => {
+    // 1. CHẶN LOAD TRANG (QUAN TRỌNG NHẤT)
+    if (e) e.preventDefault();
 
-// Chat Containers
-const chatContainer = document.getElementById('chat-container');
-const initialView = document.getElementById('initial-view');
-const mainContent = document.getElementById('mainContent');
+    const txt = dom.msgInput.value.trim();
+    if (!txt && !stagedFile) return;
+    
+    // UI Transitions
+    dom.btns.send.classList.add('hidden');
+    dom.btns.sound.classList.add('hidden');
+    dom.btns.stop.classList.remove('hidden');
+    dom.initialView.classList.add('hidden');
+    dom.chatBox.classList.remove('hidden');
+    $('mainContent').classList.remove('justify-center');
 
-// --- STATE ---
-let currentLang = 'vi';
-let isTutorMode = localStorage.getItem('isTutorMode') === 'true';
-let currentModel = JSON.parse(localStorage.getItem('currentModel')) || { model: 'Mini', version: '' };
-let abortController;
-let isRandomPromptUsedInSession = false;
-let conversationHistory = [];
-let chatHistories = {};
-let currentChatId = null;
+    // Add User Msg
+    const content = stagedFile ? [{ type: 'text', text: txt }, { type: stagedFile.type === 'video' ? 'video_url' : 'image_url', [stagedFile.type === 'video' ? 'video_url' : 'image_url']: { url: stagedFile.url } }] : txt;
+    appendMessage(content, 'user');
+    conversationHistory.push({ role: 'user', content });
 
-// --- TRANSLATIONS ---
-const translations = {
-    vi: {
-        sidebarHeader: "Lịch sử Chat", newChatTitle: "Chat mới", messagePlaceholder: "Bạn muốn biết gì?", aiTypingPlaceholder: "AI đang trả lời...", outOfTokensPlaceholder: "Bạn đã hết lượt.", sendButton: "Gửi", stopButton: "Dừng", modelButtonDefault: "Expert", modelButtonPrefix: "Mô Hình", randomButton: "Ngẫu nhiên", videoButton: "Tạo Video", learnButton: "Học Tập", footerText: "AI có thể mắc lỗi. Hãy kiểm tra thông tin quan trọng.", themeModalTitle: "Chọn Giao Diện", languageModalTitle: "Chọn Ngôn Ngữ", themeDark: "Tối", themeLight: "Sáng", themeOcean: "Biển", modalClose: "Đóng", newChatHistory: "Cuộc trò chuyện mới", greetingMorning: "Chào buổi sáng", greetingNoon: "Chào buổi trưa", greetingAfternoon: "Chào buổi chiều", greetingEvening: "Chào buổi tối", errorPrefix: "Đã có lỗi xảy ra", comingSoon: "Sắp có", comingSoonTitle: "Sắp có...", comingSoonText: "Tính năng này đang được phát triển.", langTooltip: "Đổi Ngôn Ngữ", themeTooltip: "Đổi Giao Diện", historyTooltip: "Lịch Sử Chat", newChatTooltip: "Chat Mới", modelMiniDesc: "Nhanh và hiệu quả.", modelSmartDesc: "Cân bằng tốc độ và thông minh.", modelNerdDesc: "Suy luận cao, kết quả chuẩn xác."
-    },
-    en: {
-        sidebarHeader: "Chat History", newChatTitle: "New Chat", messagePlaceholder: "What do you want to know?", aiTypingPlaceholder: "AI is replying...", outOfTokensPlaceholder: "You're out of tokens.", sendButton: "Send", stopButton: "Stop", modelButtonDefault: "Expert", modelButtonPrefix: "Model", randomButton: "Random", videoButton: "Create Video", learnButton: "Study", footerText: "AI can make mistakes. Check important info.", themeModalTitle: "Choose Theme", languageModalTitle: "Select Language", themeDark: "Dark", themeLight: "Light", themeOcean: "Ocean", modalClose: "Close", newChatHistory: "New Conversation", greetingMorning: "Good morning", greetingNoon: "Good afternoon", greetingAfternoon: "Good afternoon", greetingEvening: "Good evening", errorPrefix: "An error occurred", comingSoon: "Coming Soon", comingSoonTitle: "Coming Soon...", comingSoonText: "Under development.", langTooltip: "Switch Language", themeTooltip: "Change Theme", historyTooltip: "Chat History", newChatTooltip: "New Chat", modelMiniDesc: "Fast and efficient.", modelSmartDesc: "Balanced speed and intelligence.", modelNerdDesc: "Powerful model for complex answers."
-    },
-    zh: {
-        sidebarHeader: "聊天历史", newChatTitle: "新聊天", messagePlaceholder: "你想知道什么？", aiTypingPlaceholder: "AI正在回复...", outOfTokensPlaceholder: "代币已用完。", sendButton: "发送", stopButton: "停止", modelButtonDefault: "专家", modelButtonPrefix: "模型", randomButton: "随机", videoButton: "创建视频", learnButton: "学习", footerText: "AI可能会犯错。", themeModalTitle: "选择主题", languageModalTitle: "选择语言", themeDark: "黑暗", themeLight: "光", themeOcean: "海洋", modalClose: "关闭", newChatHistory: "新对话", greetingMorning: "早上好", greetingNoon: "中午好", greetingAfternoon: "下午好", greetingEvening: "晚上好", errorPrefix: "发生错误", comingSoon: "即将推出", comingSoonTitle: "即将推出...", comingSoonText: "开发中。", langTooltip: "切换语言", themeTooltip: "更改主题", historyTooltip: "聊天历史", newChatTooltip: "新聊天", modelMiniDesc: "快速高效。", modelSmartDesc: "速度与智能的平衡。", modelNerdDesc: "强大的模型。"
-    },
-    hi: {
-        sidebarHeader: "चैट इतिहास", newChatTitle: "नई चैट", messagePlaceholder: "आप क्या जानना चाहते हैं?", aiTypingPlaceholder: "एआई जवाब दे रहा है...", outOfTokensPlaceholder: "टोकन खत्म हो गए हैं।", sendButton: "भेजें", stopButton: "रुकें", modelButtonDefault: "विशेषज्ञ", modelButtonPrefix: "मॉडल", randomButton: "यादृच्छिक", videoButton: "वीडियो बनाएं", learnButton: "अध्ययन", footerText: "एआई गलतियाँ कर सकता है।", themeModalTitle: "थीम चुनें", languageModalTitle: "भाषा चुनें", themeDark: "अंधेरा", themeLight: "प्रकाश", themeOcean: "सागर", modalClose: "बंद करें", newChatHistory: "नई बातचीत", greetingMorning: "सुप्रभात", greetingNoon: "नमस्ते", greetingAfternoon: "नमस्ते", greetingEvening: "शुभ संध्या", errorPrefix: "त्रुटि हुई", comingSoon: "जल्द आ रहा है", comingSoonTitle: "जल्द आ रहा है...", comingSoonText: "विकास अधीन है।", langTooltip: "भाषा बदलें", themeTooltip: "थीम बदलें", historyTooltip: "चैट इतिहास", newChatTooltip: "नई चैट", modelMiniDesc: "तेज़ और कुशल।", modelSmartDesc: "गति और बुद्धिमत्ता का संतुलन।", modelNerdDesc: "शक्तिशाली मॉडल।"
-    },
-    es: {
-        sidebarHeader: "Historial", newChatTitle: "Nuevo chat", messagePlaceholder: "¿Qué quieres saber?", aiTypingPlaceholder: "IA respondiendo...", outOfTokensPlaceholder: "Sin tokens.", sendButton: "Enviar", stopButton: "Detener", modelButtonDefault: "Experto", modelButtonPrefix: "Modelo", randomButton: "Aleatorio", videoButton: "Crear video", learnButton: "Estudiar", footerText: "La IA puede cometer errores.", themeModalTitle: "Elegir tema", languageModalTitle: "Idioma", themeDark: "Oscuro", themeLight: "Luz", themeOcean: "Océano", modalClose: "Cerrar", newChatHistory: "Nueva conversación", greetingMorning: "Buenos días", greetingNoon: "Buenas tardes", greetingAfternoon: "Buenas tardes", greetingEvening: "Buenas noches", errorPrefix: "Error", comingSoon: "Próximamente", comingSoonTitle: "Próximamente...", comingSoonText: "En desarrollo.", langTooltip: "Idioma", themeTooltip: "Tema", historyTooltip: "Historial", newChatTooltip: "Nuevo", modelMiniDesc: "Rápido y eficiente.", modelSmartDesc: "Equilibrio velocidad/inteligencia.", modelNerdDesc: "Modelo potente."
-    },
-    fr: {
-        sidebarHeader: "Historique", newChatTitle: "Nouveau chat", messagePlaceholder: "Que voulez-vous savoir ?", aiTypingPlaceholder: "L'IA répond...", outOfTokensPlaceholder: "Plus de jetons.", sendButton: "Envoyer", stopButton: "Arrêter", modelButtonDefault: "Expert", modelButtonPrefix: "Modèle", randomButton: "Aléatoire", videoButton: "Vidéo", learnButton: "Étudier", footerText: "L'IA peut faire des erreurs.", themeModalTitle: "Thème", languageModalTitle: "Langue", themeDark: "Sombre", themeLight: "Lumière", themeOcean: "Océan", modalClose: "Fermer", newChatHistory: "Nouvelle conversation", greetingMorning: "Bonjour", greetingNoon: "Bon après-midi", greetingAfternoon: "Bon après-midi", greetingEvening: "Bonsoir", errorPrefix: "Erreur", comingSoon: "Bientôt", comingSoonTitle: "Bientôt...", comingSoonText: "En développement.", langTooltip: "Langue", themeTooltip: "Thème", historyTooltip: "Historique", newChatTooltip: "Nouveau", modelMiniDesc: "Rapide et efficace.", modelSmartDesc: "Équilibre vitesse/intelligence.", modelNerdDesc: "Modèle puissant."
-    },
-    ja: {
-        sidebarHeader: "履歴", newChatTitle: "新しいチャット", messagePlaceholder: "何を知りたいですか？", aiTypingPlaceholder: "AIが返信中...", outOfTokensPlaceholder: "トークン切れ。", sendButton: "送信", stopButton: "停止", modelButtonDefault: "エキスパート", modelButtonPrefix: "モデル", randomButton: "ランダム", videoButton: "ビデオ作成", learnButton: "学習", footerText: "AIは間違うことがあります。", themeModalTitle: "テーマ", languageModalTitle: "言語", themeDark: "ダーク", themeLight: "ライト", themeOcean: "海", modalClose: "閉じる", newChatHistory: "新しい会話", greetingMorning: "おはよう", greetingNoon: "こんにちは", greetingAfternoon: "こんにちは", greetingEvening: "こんばんは", errorPrefix: "エラー", comingSoon: "近日公開", comingSoonTitle: "近日公開...", comingSoonText: "開発中。", langTooltip: "言語", themeTooltip: "テーマ", historyTooltip: "履歴", newChatTooltip: "新規", modelMiniDesc: "高速で効率的。", modelSmartDesc: "速度と知能のバランス。", modelNerdDesc: "強力なモデル。"
-    },
-    it: {
-        sidebarHeader: "Cronologia", newChatTitle: "Nuova Chat", messagePlaceholder: "Cosa vuoi sapere?", aiTypingPlaceholder: "L'IA risponde...", outOfTokensPlaceholder: "Token esauriti.", sendButton: "Invia", stopButton: "Stop", modelButtonDefault: "Esperto", modelButtonPrefix: "Modello", randomButton: "Casuale", videoButton: "Crea Video", learnButton: "Studia", footerText: "L'IA può sbagliare.", themeModalTitle: "Tema", languageModalTitle: "Lingua", themeDark: "Scuro", themeLight: "Chiaro", themeOcean: "Oceano", modalClose: "Chiudi", newChatHistory: "Nuova Conversazione", greetingMorning: "Buongiorno", greetingNoon: "Buon pomeriggio", greetingAfternoon: "Buon pomeriggio", greetingEvening: "Buonasera", errorPrefix: "Errore", comingSoon: "Prossimamente", comingSoonTitle: "Prossimamente...", comingSoonText: "In sviluppo.", langTooltip: "Lingua", themeTooltip: "Tema", historyTooltip: "Cronologia", newChatTooltip: "Nuova", modelMiniDesc: "Veloce ed efficiente.", modelSmartDesc: "Equilibrio velocità/intelligenza.", modelNerdDesc: "Modello potente."
+    // Reset Input
+    dom.msgInput.value = '';
+    stagedFile = null;
+    dom.fileThumb.innerHTML = '';
+    
+    // Add AI Placeholder
+    const aiBubble = appendMessage('', 'ai');
+    aiBubble.classList.add('streaming');
+    dom.chatBox.scrollTop = dom.chatBox.scrollHeight;
+
+    abortController = new AbortController();
+
+    try {
+        const reply = await streamAI(currentModel.id, conversationHistory, aiBubble, abortController.signal);
+        conversationHistory.push({ role: 'assistant', content: reply });
+        saveChat();
+    } catch (err) {
+        if(err.name !== 'AbortError') console.error(err);
+    } finally {
+        // Cleanup UI
+        aiBubble.classList.remove('streaming');
+        // RE-RENDER MATH TO FIX LAYOUT
+        const finalContent = conversationHistory[conversationHistory.length-1]?.content || aiBubble.innerText;
+        aiBubble.innerHTML = formatText(finalContent);
+        setTimeout(() => renderMath(aiBubble), 50);
+
+        dom.btns.stop.classList.add('hidden');
+        dom.btns.sound.classList.remove('hidden');
+        dom.msgInput.focus();
     }
 };
 
-// --- UI TEXT ELEMENTS ---
-const textElements = {
-    header: document.getElementById('header-title'),
-    main: document.getElementById('main-title'),
-    input: document.getElementById('message-input'),
-    footer: document.getElementById('footer-text'),
-    themeIcon: document.getElementById('theme-icon'),
-    logoText: document.getElementById('logo-text'),
-    sidebarHeader: document.getElementById('sidebar-header'),
-    modelBtnText: document.getElementById('model-button-text-display'),
-    themeModalTitle: document.getElementById('theme-modal-title'),
-    languageModalTitle: document.getElementById('language-modal-title'),
-    themeDarkText: document.getElementById('theme-dark-text'),
-    themeLightText: document.getElementById('theme-light-text'),
-    themeOceanText: document.getElementById('theme-ocean-text'),
-    closeModalButton: document.getElementById('close-modal-button'),
-    closeLanguageModalBtn: document.getElementById('close-language-modal-button'),
-    comingSoonTitle: document.getElementById('coming-soon-title'),
-    comingSoonText: document.getElementById('coming-soon-text'),
-    closeComingSoonModal: document.getElementById('close-coming-soon-modal'),
-    randomTooltip: document.getElementById('random-tooltip'),
-    videoTooltip: document.getElementById('video-tooltip'),
-    learnTooltip: document.getElementById('learn-tooltip'),
-    langTooltip: document.getElementById('lang-tooltip'),
-    themeTooltip: document.getElementById('theme-tooltip'),
-    historyTooltip: document.getElementById('history-tooltip'),
-    newChatTooltip: document.getElementById('new-chat-tooltip'),
-};
-
-const themeColors = {
-    dark: {
-        bg: ['bg-gradient-to-br', 'from-[#212935]', 'to-black'],
-        text: 'text-gray-100',
-        subtleText: 'text-gray-400',
-        logo: 'text-gray-100',
-        iconColor: 'text-gray-300',
-        popup: ['bg-gray-900', 'border', 'border-gray-700'],
-        popupButton: ['text-gray-300', 'hover:bg-white/10', 'hover:text-white'],
-        popupSelected: ['bg-sky-500/20', '!text-sky-300', 'font-semibold'],
-        sidebar: ['bg-black/10', 'border-white/10'],
-        sidebarText: 'text-gray-200',
-        historyActive: ['bg-blue-800/50'],
-        historyHover: ['hover:bg-blue-800/30'],
-        form: ['bg-black/30', 'border-white/20'],
-        headerPill: [],
-        aiMessage: ['text-gray-100'],
-        userMessage: ['bg-blue-600', 'text-white'],
-        inputColor: ['text-gray-200', 'placeholder-gray-500']
-    },
-    light: {
-        bg: ['bg-white'],
-        text: 'text-black',
-        subtleText: 'text-gray-600',
-        logo: 'text-blue-500',
-        iconColor: 'text-gray-800',
-        popup: ['bg-white', 'border', 'border-gray-200', 'shadow-lg'],
-        popupButton: ['text-gray-700', 'hover:bg-gray-100'],
-        popupSelected: ['bg-blue-100', '!text-blue-600', 'font-semibold'],
-        sidebar: ['bg-gray-50', 'border-r', 'border-gray-200'],
-        sidebarText: 'text-black',
-        historyActive: ['bg-blue-100'],
-        historyHover: ['hover:bg-gray-200'],
-        form: ['bg-gray-100', 'border', 'border-gray-300', 'shadow'],
-        headerPill: [],
-        aiMessage: ['text-black'],
-        userMessage: ['bg-blue-500', 'text-white'],
-        inputColor: ['text-black', 'placeholder-gray-400']
-    },
-    ocean: {
-        bgImage: `url('${oceanImageUrl}')`,
-        text: 'text-white',
-        subtleText: 'text-gray-300',
-        logo: 'text-white',
-        iconColor: 'text-white',
-        popup: ['bg-black/70', 'backdrop-blur-md', 'border', 'border-white/10'],
-        popupButton: ['text-gray-300', 'hover:bg-white/10', 'hover:text-white'],
-        popupSelected: ['bg-sky-400/20', '!text-sky-300', 'font-semibold'],
-        sidebar: ['bg-black/10', 'border-white/10'],
-        sidebarText: 'text-white',
-        historyActive: ['bg-white/20'],
-        historyHover: ['hover:bg-white/10'],
-        form: ['bg-black/30', 'border-white/20'],
-        headerPill: ['bg-black/30', 'backdrop-blur-lg', 'border', 'border-white/20'],
-        aiMessage: ['text-white'],
-        userMessage: ['bg-blue-500', 'text-white'],
-        inputColor: ['text-white', 'placeholder-gray-300']
+// Gắn sự kiện (Event Listener)
+dom.chatForm.addEventListener('submit', handleSubmit);
+dom.msgInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSubmit(null);
     }
-};
+});
+dom.btns.send.addEventListener('click', (e) => {
+    e.preventDefault(); // Chặn hành vi mặc định của nút submit
+    handleSubmit(null);
+});
 
-// --- FUNCTIONS ---
 
-function saveStateToLocalStorage() {
-    const historiesToSave = { ...chatHistories };
-    if (historiesToSave[currentChatId] && historiesToSave[currentChatId].length === 0) {
-        delete historiesToSave[currentChatId];
+// =====================================================================
+// SMART BUFFER STREAMING (Xử lý kết nối & Chữ)
+// =====================================================================
+async function streamAI(model, msgs, el, signal) {
+    const promptConfig = systemPrompts[currentLang] || systemPrompts['en'];
+    const systemMsg = { role: 'system', content: isTutorMode ? promptConfig.tutor : promptConfig.assistant };
+    
+    // URL LOCAL HOẶC CLOUDFLARE
+    const isLocal = location.hostname.includes('local') || location.protocol === 'file:';
+    const ENDPOINT = isLocal ? 'YOUR_CLOUDFLARE_URL_HERE/api/handler' : '/api/handler'; // Điền URL nếu test local
+    // Mặc định fallback tốt cho deploy: '/api/handler'
+    
+    const res = await fetch(ENDPOINT.startsWith('YOUR') ? '/api/handler' : ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modelName: model, messages: [systemMsg, ...msgs], max_tokens: 4000, temperature: 0.7 }),
+        signal
+    });
+
+    if (!res.ok) throw new Error("API Error");
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let text = "";
+    let buffer = "";
+
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // Giữ lại dòng dở dang
+
+        for (const line of lines) {
+            const str = line.trim();
+            if (str.startsWith('data: ')) {
+                const json = str.slice(6).trim();
+                if (json === '[DONE]') break;
+                try {
+                    const parsed = JSON.parse(json);
+                    const chunk = parsed.choices?.[0]?.delta?.content || "";
+                    if (chunk) {
+                        text += chunk;
+                        el.innerHTML = formatText(text);
+                        dom.chatBox.scrollTop = dom.chatBox.scrollHeight;
+                    }
+                } catch (e) {}
+            }
+        }
     }
-    localStorage.setItem('chatHistories', JSON.stringify(historiesToSave));
-    localStorage.setItem('currentChatId', currentChatId);
+    return text;
 }
 
-function initializeApp() {
-    const savedHistories = localStorage.getItem('chatHistories');
-    if (savedHistories) {
-        chatHistories = JSON.parse(savedHistories);
-    } else {
-        chatHistories = {};
-    }
-    startNewChat();
+// =====================================================================
+// UI UTILS (Hiển thị)
+// =====================================================================
+function formatText(txt) {
+    if(!txt) return '';
+    let f = txt.replace(/^##\s+(.*)$/gm, '<h3 class="text-lg font-bold text-blue-400 mt-2 border-b border-gray-600/30">$1</h3>')
+               .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+               .replace(/\n/g, '<br>');
+    return f;
 }
 
-function applyTheme(theme) {
-    body.className = "flex flex-col h-screen overflow-hidden transition-colors duration-500";
-    backgroundContainer.className = "fixed inset-0 -z-10 transition-all duration-500 bg-cover bg-center";
-    backgroundContainer.style.backgroundImage = '';
-    const config = themeColors[theme];
-    const allConfigs = Object.values(themeColors);
-
-    themeOptionButtons.forEach(btn => {
-        btn.classList.remove('bg-blue-500/20');
-        if (btn.dataset.theme === theme) {
-             btn.classList.add('bg-blue-500/20');
-        }
-    });
-
-    body.classList.remove(...allConfigs.flatMap(c => c.bg).flat());
-    if (config.bgImage) {
-        backgroundContainer.style.backgroundImage = config.bgImage;
-        backgroundContainer.classList.add('image-overlay');
-    } else {
-        body.classList.add(...config.bg);
-        backgroundContainer.classList.remove('image-overlay');
-    }
-
-    body.classList.remove(...allConfigs.map(c => c.text));
-    body.classList.add(config.text);
-
-    const allLogoColors = allConfigs.map(c => c.logo);
-    textElements.logoText.classList.remove(...allLogoColors);
-    textElements.logoText.classList.add(config.logo);
-
-    const sidebarEl = document.getElementById('sidebar');
-    const formEl = document.getElementById('chat-form');
-    const pillEls = document.querySelectorAll('.header-pill-container');
-    const allPillClasses = allConfigs.flatMap(c => c.headerPill || []).flat();
-    sidebarEl.classList.remove(...allConfigs.flatMap(c => c.sidebar || []).flat());
-    sidebarEl.classList.add(...(config.sidebar || []));
-    formEl.classList.remove(...allConfigs.flatMap(c => c.form || []).flat());
-    formEl.classList.add(...(config.form || []));
-    pillEls.forEach(pill => {
-        pill.classList.remove(...allPillClasses);
-        pill.classList.add(...(config.headerPill || []));
-    });
-
-    const themeableIconEls = [
-        sidebarToggle.querySelector('svg'), newChatHeaderBtn.querySelector('svg'),
-        langSwitchBtn, document.getElementById('theme-icon'),
-        document.querySelector('#random-prompt-icon-btn svg'), 
-        document.querySelector('#video-icon-btn svg'), 
-        document.querySelector('#learn-icon-btn svg'), 
-        document.querySelector('#upload-file-btn svg')
-    ];
-    const allIconColors = allConfigs.map(c => c.iconColor);
-    themeableIconEls.forEach(el => {
-        if (el) {
-            el.classList.remove(...allIconColors);
-            el.classList.add(config.iconColor);
-        }
-    });
-
-    const messageInputEl = document.getElementById('message-input');
-    const allInputColors = allConfigs.flatMap(c => c.inputColor || []).flat();
-    messageInputEl.classList.remove(...allInputColors);
-    messageInputEl.classList.add(...(config.inputColor || []));
-
-    textElements.footer.classList.remove(...allConfigs.map(c => c.subtleText));
-    textElements.footer.classList.add(config.subtleText);
-    const tokenDisplayIcon = document.querySelector('#token-display svg');
-    tokenDisplayIcon.classList.remove(...allConfigs.map(c => c.iconColor));
-    tokenDisplayIcon.classList.add(config.iconColor);
-
-    const modelPopup = document.getElementById('model-popup');
-    modelPopup.classList.remove(...allConfigs.flatMap(c => c.popup).flat());
-    modelPopup.classList.add(...config.popup);
-
-    const chatContainer = document.getElementById('chat-container');
-    if (chatContainer) {
-        const aiMessages = chatContainer.querySelectorAll('.ai-message-wrapper');
-        const allAiMessageClasses = allConfigs.flatMap(c => c.aiMessage || []).flat();
-        aiMessages.forEach(msg => {
-            msg.classList.remove(...allAiMessageClasses);
-            msg.classList.add(...config.aiMessage);
-        });
-        const userMessages = chatContainer.querySelectorAll('.user-message-wrapper');
-        const allUserMessageClasses = allConfigs.flatMap(c => c.userMessage || []).flat();
-        userMessages.forEach(msg => {
-            msg.classList.remove(...allUserMessageClasses);
-            msg.classList.add(...config.userMessage);
+function appendMessage(content, role) {
+    const wrap = document.createElement('div');
+    wrap.className = `flex w-full mb-4 ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+    
+    const bubble = document.createElement('div');
+    // Style logic rút gọn
+    const theme = getCurrentThemeColors();
+    bubble.className = `max-w-[85%] rounded-2xl px-5 py-3 shadow-md animate-pop-in ${role === 'user' ? theme.user : theme.ai}`;
+    
+    if (typeof content === 'string') bubble.innerHTML = formatText(content);
+    else {
+        // Media rendering
+        content.forEach(c => {
+            if(c.text) bubble.innerHTML += `<div>${formatText(c.text)}</div>`;
+            if(c.image_url) bubble.innerHTML += `<img src="${c.image_url.url}" class="rounded-lg max-w-xs mt-2"/>`;
+            if(c.video_url) bubble.innerHTML += `<video src="${c.video_url.url}" controls class="rounded-lg max-w-xs mt-2"/>`;
         });
     }
-
-    localStorage.setItem('theme', theme);
-    renderHistoryList();
-    updateLearnButtonVisualState();
+    wrap.appendChild(bubble);
+    dom.chatBox.appendChild(wrap);
+    return bubble;
 }
 
-function updateActiveLanguageButton(lang) {
-    languageOptionButtons.forEach(btn => {
-        btn.classList.remove('bg-blue-500/20', 'text-blue-600');
-        if (btn.dataset.lang === lang) {
-            btn.classList.add('bg-blue-500/20', 'text-blue-600');
-        }
+function renderMath(el) {
+    if (window.renderMathInElement) renderMathInElement(el, {
+        delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}],
+        throwOnError: false
     });
 }
 
-function switchLanguage(lang) {
-    currentLang = lang;
-    const t = translations[lang];
-
-    textElements.sidebarHeader.textContent = t.sidebarHeader;
-    textElements.input.placeholder = t.messagePlaceholder;
-    textElements.footer.textContent = t.footerText;
-    textElements.themeModalTitle.textContent = t.themeModalTitle;
-    textElements.languageModalTitle.textContent = t.languageModalTitle;
-    textElements.themeDarkText.textContent = t.themeDark;
-    textElements.themeLightText.textContent = t.themeLight;
-    textElements.themeOceanText.textContent = t.themeOcean;
-    textElements.closeModalButton.textContent = t.modalClose;
-    textElements.closeLanguageModalBtn.textContent = t.modalClose;
-    textElements.comingSoonTitle.textContent = t.comingSoonTitle;
-    textElements.comingSoonText.textContent = t.comingSoonText;
-    textElements.closeComingSoonModal.textContent = t.modalClose;
-    textElements.randomTooltip.textContent = t.randomButton;
-    textElements.videoTooltip.textContent = t.videoButton;
-    textElements.learnTooltip.textContent = t.learnButton;
-    textElements.langTooltip.textContent = t.langTooltip;
-    textElements.themeTooltip.textContent = t.themeTooltip;
-    textElements.historyTooltip.textContent = t.historyTooltip;
-    textElements.newChatTooltip.textContent = t.newChatTooltip;
-
-    langSwitchBtn.textContent = lang.toUpperCase();
-
-    document.documentElement.lang = lang;
-    localStorage.setItem('language', lang);
-
-    updateActiveLanguageButton(lang);
-    updateModelButtonText();
-    setGreeting();
-    renderHistoryList();
-    updateTokenUI();
+// =====================================================================
+// LOGIC GIAO DIỆN (Themes, History, Upload)
+// =====================================================================
+function getCurrentThemeColors() {
+    const t = localStorage.getItem('theme') || 'dark';
+    if(t === 'light') return { user: 'bg-blue-500 text-white', ai: 'bg-gray-100 text-black border border-gray-200' };
+    return { user: 'bg-blue-600 text-white', ai: 'bg-white/10 text-gray-100 backdrop-blur-sm' };
 }
-
-let isModalAnimating = false;
-const animationDuration = 300;
-
-function showModal(modal, show) {
-    if (isModalAnimating && (modal === themeModal || modal === languageModal || modal === document.getElementById('update-log-modal') || modal === comingSoonModal)) return;
-    isModalAnimating = true;
-    const content = modal.querySelector('div[id$="-content"]');
-    if (show) {
-        modal.classList.remove('hidden');
-        content.classList.remove('modal-fade-leave');
-        content.classList.add('modal-fade-enter');
-    } else {
-        content.classList.remove('modal-fade-enter');
-        content.classList.add('modal-fade-leave');
-    }
-    setTimeout(() => {
-        if (!show) {
-            modal.classList.add('hidden');
-        }
-        isModalAnimating = false;
-    }, animationDuration);
-}
-
-function toggleThemeModal() {
-    const isHidden = themeModal.classList.contains('hidden');
-    showModal(themeModal, isHidden);
-}
-
-function setGreeting() {
-    const mainTitle = document.getElementById('main-title');
-    if (!mainTitle) return;
-    const now = new Date();
-    const hour = now.getHours();
-    const t = translations[currentLang];
-    let greeting = '';
-    if (hour >= 5 && hour < 11) greeting = t.greetingMorning;
-    else if (hour >= 11 && hour < 14) greeting = t.greetingNoon;
-    else if (hour >= 14 && hour < 18) greeting = t.greetingAfternoon;
-    else greeting = t.greetingEvening;
-    mainTitle.textContent = greeting;
-}
-
-themeMenuButton.addEventListener('click', toggleThemeModal);
-closeModalButton.addEventListener('click', () => showModal(themeModal, false));
-themeModal.addEventListener('click', (e) => {
-    if (e.target === themeModal) showModal(themeModal, false);
-});
-
-themeOptionButtons.forEach(button => {
-    button.addEventListener('click', () => {
-        const theme = button.getAttribute('data-theme');
-        applyTheme(theme);
-        showModal(themeModal, false);
-    });
-});
-
-sidebarToggle.addEventListener('click', () => {
-    sidebar.classList.toggle('-translate-x-full');
-    sidebar.classList.toggle('hidden');
-});
 
 function startNewChat() {
     currentChatId = Date.now().toString();
     conversationHistory = [];
     chatHistories[currentChatId] = conversationHistory;
-    chatContainer.innerHTML = '';
-    initialView.classList.remove('hidden');
-    chatContainer.classList.add('hidden');
-    mainContent.classList.add('justify-center');
-    mainContent.classList.remove('justify-start');
-    setGreeting();
+    dom.chatBox.innerHTML = '';
+    dom.initialView.classList.remove('hidden');
+    dom.chatBox.classList.add('hidden');
+    $('mainContent').classList.add('justify-center');
     
-    isRandomPromptUsedInSession = false; 
-    updateRandomButtonVisibility();
-    
-    renderHistoryList();
-    setActiveHistoryItem(currentChatId);
-    saveStateToLocalStorage();
+    renderHistory();
+    saveChat();
+    dom.msgInput.focus();
 }
 
-function updateRandomButtonVisibility() {
-    if (conversationHistory.length === 0 && !isRandomPromptUsedInSession) {
-        randomPromptBtn.classList.remove('hidden');
-    } else {
-        randomPromptBtn.classList.add('hidden');
-    }
+function saveChat() {
+    if(chatHistories[currentChatId] && chatHistories[currentChatId].length === 0) delete chatHistories[currentChatId];
+    localStorage.setItem('chatHistories', JSON.stringify(chatHistories));
 }
 
-// === KATE X RENDERING FUNCTION (Fix lỗi Regex ký tự lạ) ===
-function renderMath(element) {
-    if (window.renderMathInElement) {
-        renderMathInElement(element, {
-            delimiters: [
-                {left: '$$', right: '$$', display: true},
-                {left: '$', right: '$', display: false},
-                {left: '\\(', right: '\\)', display: false},
-                {left: '\\[', right: '\\]', display: true}
-            ],
-            throwOnError: false
-        });
-    }
-}
-
-function renderHistoryList() {
-    historyList.innerHTML = '';
-    const currentTheme = localStorage.getItem('theme') || 'dark';
-    const themeConfig = themeColors[currentTheme];
-
-    Object.keys(chatHistories).sort().reverse().forEach(chatId => {
-        const history = chatHistories[chatId];
-        if (chatId === currentChatId && history.length === 0) return;
-
-        let firstMessageText = translations[currentLang].newChatHistory;
-        if (history.length > 0) {
-            const firstContent = history[0].content;
-            if (typeof firstContent === 'string') {
-                firstMessageText = firstContent;
-            } else if (Array.isArray(firstContent)) {
-                const mediaPart = firstContent.find(p => p.type === 'image_url' || p.type === 'video_url');
-                const textPart = firstContent.find(p => p.type === 'text');
-
-                if (mediaPart && mediaPart.type === 'image_url') firstMessageText = '[Hình ảnh]';
-                if (mediaPart && mediaPart.type === 'video_url') firstMessageText = '[Video]';
-
-                if (textPart && textPart.text) {
-                   firstMessageText = (mediaPart ? firstMessageText + " " : "") + textPart.text;
-                }
-            }
-        }
-
-        const item = document.createElement('div');
-        item.className = 'history-item flex items-center justify-between p-2 rounded-md cursor-pointer';
-        item.classList.add(...themeConfig.historyHover);
-        item.dataset.chatId = chatId;
-
-        const text = document.createElement('span');
-        text.className = 'text-sm truncate';
-        text.textContent = firstMessageText.substring(0, 25) + (firstMessageText.length > 25 ? '...' : '');
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'p-1 rounded-md hover:bg-red-500/20 text-gray-500 hover:text-red-500';
-        deleteBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>`;
-        deleteBtn.onclick = (e) => {
-            e.stopPropagation();
-            delete chatHistories[chatId];
-            if (currentChatId === chatId) startNewChat();
-            else {
-               saveStateToLocalStorage();
-               renderHistoryList();
-            }
-        };
-
-        item.appendChild(text);
-        item.appendChild(deleteBtn);
-        item.onclick = () => loadChatHistory(chatId);
-        historyList.appendChild(item); 
-    });
-    if(currentChatId) setActiveHistoryItem(currentChatId);
-}
-
-function loadChatHistory(chatId) {
-    currentChatId = chatId;
-    conversationHistory = chatHistories[chatId] || [];
-    chatContainer.innerHTML = '';
-
-    if(conversationHistory.length > 0) {
-         initialView.classList.add('hidden');
-         chatContainer.classList.remove('hidden');
-         mainContent.classList.remove('justify-center');
-         mainContent.classList.add('justify-start');
-         conversationHistory.forEach(msg => {
-            const el = createMessageElement(msg.content, msg.role);
-            chatContainer.appendChild(el);
-         });
-         // Render KaTeX khi load lịch sử
-         renderMath(chatContainer);
-    } else {
-         initialView.classList.remove('hidden');
-         chatContainer.classList.add('hidden');
-         setGreeting();
-    }
-     setActiveHistoryItem(chatId);
-     updateRandomButtonVisibility();
-     saveStateToLocalStorage();
-}
-
-function setActiveHistoryItem(chatId) {
-    const currentTheme = localStorage.getItem('theme') || 'dark';
-    const themeConfig = themeColors[currentTheme];
-    document.querySelectorAll('.history-item').forEach(item => {
-        item.classList.remove(...Object.values(themeColors).flatMap(t => t.historyActive).flat());
-        if(item.dataset.chatId === chatId) item.classList.add(...themeConfig.historyActive);
+function renderHistory() {
+    $('history-list').innerHTML = '';
+    Object.keys(chatHistories).sort().reverse().forEach(id => {
+        if(id === currentChatId && chatHistories[id].length === 0) return;
+        
+        const first = chatHistories[id][0]?.content || "Chat Mới";
+        const preview = typeof first === 'string' ? first : '[File]';
+        
+        const div = document.createElement('div');
+        div.className = "flex justify-between items-center p-2.5 rounded-lg hover:bg-white/10 cursor-pointer text-sm text-gray-200 transition";
+        if(id === currentChatId) div.classList.add('bg-blue-600/30');
+        div.innerHTML = `<span class="truncate w-4/5">${preview}</span> <span class="text-red-400 hover:text-red-300 opacity-60 hover:opacity-100 text-lg px-1" onclick="deleteChat(event, '${id}')">&times;</span>`;
+        div.onclick = () => loadChat(id);
+        $('history-list').appendChild(div);
     });
 }
 
-newChatHeaderBtn.addEventListener('click', startNewChat);
-
-document.addEventListener('DOMContentLoaded', () => {
-
-    // ==========================================
-    // BẢO MẬT: KIỂM TRA SỐ LẦN SỬ DỤNG
-    // ==========================================
-    function checkSecurityGate() {
-        let usageCount = parseInt(localStorage.getItem('appUsageCount') || '0');
-        usageCount++;
-        // console.log("Số lần dùng: " + usageCount);
-        if (usageCount >= 5) {
-            localStorage.setItem('appUsageCount', usageCount);
-            window.location.href = 'verify.html';
-        } else {
-            localStorage.setItem('appUsageCount', usageCount);
-        }
-    }
-    // Chạy kiểm tra ngay khi vào App
-    checkSecurityGate();
-    // ==========================================
-
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    const savedLang = localStorage.getItem('language') || 'vi';
-
-    switchLanguage(savedLang);
-    applyTheme(savedTheme);
-    initializeApp();
-    handleUpdateLog();
-    initTokenSystem();
-
-    soundWaveButton.classList.remove('hidden');
-    sendButton.classList.add('hidden');
-
-    updateModelButtonText();
-    updateLearnButtonVisualState();
-
-    messageInput.addEventListener('input', () => {
-        if (messageInput.value.trim().length > 0) {
-            soundWaveButton.classList.add('hidden');
-            sendButton.classList.remove('hidden');
-            isRandomPromptUsedInSession = true; 
-            updateRandomButtonVisibility(); 
-        } else {
-            soundWaveButton.classList.remove('hidden');
-            sendButton.classList.add('hidden');
-        }
-    });
-
-    const initialView = document.getElementById('initial-view');
-    if (!initialView.classList.contains('hidden')) {
-         document.getElementById('main-title').classList.add('animate-fade-up');
-    }
-
-    document.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.key.toLowerCase() === 'g') {
-            e.preventDefault();
-            startNewChat();
-        }
-        const activeEl = document.activeElement;
-        const isTypingInInput = activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA';
-        if (!isTypingInInput && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-            messageInput.focus();
-        }
-    });
-
-});
-
-function handleUpdateLog() {
-    const updateLogModal = document.getElementById('update-log-modal');
-    const closeUpdateLogBtn = document.getElementById('close-update-log');
-    const dontShowAgainCheckbox = document.getElementById('dont-show-again');
-    const updateLogVersion = '1.0.3'; 
-    const hasSeenUpdate = localStorage.getItem('seenUpdateLogVersion');
-
-    if (hasSeenUpdate !== updateLogVersion && updateLogModal) showModal(updateLogModal, true);
-
-    const closeAndSavePreference = () => {
-        if (dontShowAgainCheckbox.checked) localStorage.setItem('seenUpdateLogVersion', updateLogVersion);
-        showModal(updateLogModal, false);
-    };
-
-    if(closeUpdateLogBtn) closeUpdateLogBtn.addEventListener('click', closeAndSavePreference);
-    if(updateLogModal) {
-        updateLogModal.addEventListener('click', (e) => {
-            if(e.target === updateLogModal) closeAndSavePreference();
-        });
-    }
-}
-
-function initTokenSystem() {
-    if (tokenConfig.IS_INFINITE) {
-        updateTokenUI();
-        return;
-    }
-    let maxTokens = localStorage.getItem('maxTokens');
-    if (maxTokens === null) {
-        maxTokens = tokenConfig.MAX_TOKENS;
-        localStorage.setItem('maxTokens', maxTokens);
-    }
-    let userTokens = localStorage.getItem('userTokens');
-    if (userTokens === null) {
-        userTokens = maxTokens;
-        localStorage.setItem('userTokens', userTokens);
-        localStorage.setItem('lastTokenRegenTimestamp', Date.now());
-    }
-    currentTokenInput.addEventListener('change', handleTokenInputChange);
-    maxTokenInput.addEventListener('change', handleTokenInputChange);
-    regenerateTokens();
-    setInterval(regenerateTokens, 60 * 1000);
-}
-
-function handleTokenInputChange() {
-    let newCurrent = parseInt(currentTokenInput.value);
-    let newMax = parseInt(maxTokenInput.value);
-    if (isNaN(newMax) || newMax < 1) newMax = parseInt(localStorage.getItem('maxTokens')) || tokenConfig.MAX_TOKENS;
-    if (isNaN(newCurrent) || newCurrent < 0) newCurrent = 0;
-    if (newCurrent > newMax) newCurrent = newMax;
-    localStorage.setItem('userTokens', newCurrent);
-    localStorage.setItem('maxTokens', newMax);
-    updateTokenUI();
-}
-
-function regenerateTokens() {
-    if (tokenConfig.IS_INFINITE) return;
-    const maxTokens = parseInt(localStorage.getItem('maxTokens'));
-    let currentTokens = parseInt(localStorage.getItem('userTokens') || '0');
-    if (currentTokens >= maxTokens) {
-        updateTokenUI();
-        return;
-    }
-    const lastRegenTimestamp = parseInt(localStorage.getItem('lastTokenRegenTimestamp') || Date.now());
-    const now = Date.now();
-    const timeElapsed = now - lastRegenTimestamp;
-    const regenIntervalMs = tokenConfig.TOKEN_REGEN_INTERVAL_MINUTES * 60 * 1000;
-    if (timeElapsed >= regenIntervalMs) {
-        const intervalsPassed = Math.floor(timeElapsed / regenIntervalMs);
-        const tokensToAdd = intervalsPassed * tokenConfig.TOKEN_REGEN_AMOUNT;
-        currentTokens = Math.min(maxTokens, currentTokens + tokensToAdd);
-        localStorage.setItem('userTokens', currentTokens);
-        localStorage.setItem('lastTokenRegenTimestamp', now);
-    }
-    updateTokenUI();
-}
-
-function updateTokenUI() {
-    messageInput.disabled = false;
-    if (tokenConfig.IS_INFINITE) {
-        tokenInputsContainer.classList.add('hidden');
-        tokenInfinity.classList.remove('hidden');
-        messageInput.placeholder = translations[currentLang].messagePlaceholder;
-        return;
-    }
-    tokenInputsContainer.classList.remove('hidden');
-    tokenInfinity.classList.add('hidden');
-    const currentTokens = parseInt(localStorage.getItem('userTokens') || '0');
-    const maxTokens = parseInt(localStorage.getItem('maxTokens') || tokenConfig.MAX_TOKENS);
-    currentTokenInput.value = currentTokens;
-    maxTokenInput.value = maxTokens;
-    if (currentTokens < tokenConfig.TOKEN_COST_PER_MESSAGE) {
-        messageInput.disabled = true;
-        messageInput.placeholder = translations[currentLang].outOfTokensPlaceholder;
-    } else {
-        messageInput.placeholder = translations[currentLang].messagePlaceholder;
-    }
-}
-
-function consumeToken() {
-    if (tokenConfig.IS_INFINITE) return true;
-    let currentTokens = parseInt(localStorage.getItem('userTokens') || '0');
-    if (currentTokens >= tokenConfig.TOKEN_COST_PER_MESSAGE) {
-        currentTokens -= tokenConfig.TOKEN_COST_PER_MESSAGE;
-        localStorage.setItem('userTokens', currentTokens);
-        updateTokenUI();
-        return true;
-    }
-    return false;
-}
-
-const randomPrompts = {
-    vi: ["Kể một câu chuyện cười", "Thủ đô của nước Pháp là gì?", "Viết một đoạn văn về tầm quan trọng của việc đọc sách.", "Công thức làm món phở bò?"],
-    en: ["Tell me a joke", "What is the capital of France?", "Write a paragraph about the importance of reading books.", "What is the recipe for beef pho?"],
-    zh: ["讲个笑话", "法国的首都是哪里？", "写一段关于阅读重要性的段落。", "牛肉河粉的食谱是什么？"],
-    hi: ["एक चुटकुला सुनाओ", "फ्रांस की राजधानी क्या है?", "किताबें पढ़ने के महत्व पर एक पैराग्राफ लिखें।", "बीफ फो की रेसिपी क्या है?"],
-    es: ["Cuéntame un chiste", "¿Cuál es la capital de Francia?", "Escribe un párrafo sobre la importancia de leer libros.", "¿Cuál es la receta del pho de ternera?"],
-    fr: ["Raconte-moi une blague", "Quelle est la capitale de la France ?", "Écrivez un paragraphe sur l'importance de la lecture.", "Quelle est la recette du phở au bœuf ?"],
-    ja: ["冗談を言って", "フランスの首都はどこですか？", "読書の重要性について段落を書いてください。", "牛肉フォーのレシピは何ですか？"],
-    it: ["Raccontami una barzelletta", "Qual è la capitale della Francia?", "Scrivi un paragrafo sull'importanza di leggere libri.", "Qual è la ricetta per il pho di manzo?"]
+window.deleteChat = (e, id) => {
+    e.stopPropagation();
+    delete chatHistories[id];
+    saveChat();
+    if(id === currentChatId) startNewChat();
+    else renderHistory();
 };
 
-randomPromptBtn.addEventListener('click', () => {
-    if (isRandomPromptUsedInSession) return;
-    const prompts = randomPrompts[currentLang];
-    const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
-    messageInput.value = randomPrompt;
-    messageInput.dispatchEvent(new Event('input'));
-    isRandomPromptUsedInSession = true;
-    updateRandomButtonVisibility();
-    chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
-});
-
-videoBtn.addEventListener('click', () => alert(translations[currentLang].comingSoon));
-
-function updateLearnButtonVisualState() {
-    const learnIcon = learnBtn.querySelector('svg');
-    const currentTheme = localStorage.getItem('theme') || 'dark';
-    const activeColorClass = currentTheme === 'light' ? 'bg-blue-500' : 'bg-blue-600';
-    if (isTutorMode) {
-        learnBtn.classList.add(activeColorClass);
-        learnIcon.classList.add('text-white');
-        learnIcon.classList.remove(themeColors[currentTheme].iconColor);
-    } else {
-        learnBtn.classList.remove('bg-blue-600', 'bg-blue-500');
-        learnIcon.classList.remove('text-white');
-        learnIcon.classList.add(themeColors[currentTheme].iconColor);
-    }
+function loadChat(id) {
+    currentChatId = id;
+    conversationHistory = chatHistories[id] || [];
+    dom.chatBox.innerHTML = '';
+    
+    if (conversationHistory.length) {
+        dom.initialView.classList.add('hidden');
+        dom.chatBox.classList.remove('hidden');
+        $('mainContent').classList.remove('justify-center');
+        conversationHistory.forEach(m => appendMessage(m.content, m.role));
+        renderMath(dom.chatBox);
+    } else startNewChat();
+    renderHistory();
 }
 
-learnBtn.addEventListener('click', () => {
+// =====================================================================
+// INIT & EVENT HANDLERS
+// =====================================================================
+dom.btns.upload.onclick = () => dom.fileInput.click();
+dom.fileInput.onchange = (e) => {
+    const f = e.target.files[0];
+    if(f) {
+        const type = f.type.startsWith('video') ? 'video' : 'image';
+        const url = URL.createObjectURL(f);
+        stagedFile = { file: f, url, type };
+        dom.fileThumb.innerHTML = `<div class="relative inline-block mt-2"><${type} src="${url}" class="h-16 rounded border border-gray-600" ${type==='video'?'autoplay muted':''}></${type}><button class="absolute -top-2 -right-2 bg-red-500 rounded-full w-5 h-5 text-xs text-white" onclick="this.parentElement.remove(); stagedFile=null;">×</button></div>`;
+    }
+};
+
+dom.btns.random.onclick = () => {
+    const prompts = ["Kể chuyện cười", "Tóm tắt sách hay", "Công thức toán học Euler", "Code HTML cơ bản"];
+    dom.msgInput.value = prompts[Math.floor(Math.random() * prompts.length)];
+    handleSubmit(null);
+};
+
+dom.msgInput.oninput = () => {
+    const hasText = dom.msgInput.value.trim().length > 0;
+    dom.btns.sound.classList.toggle('hidden', hasText);
+    dom.btns.send.classList.toggle('hidden', !hasText);
+};
+
+// Toggle Sidebar
+dom.btns.toggleSide.onclick = () => dom.sidebar.classList.toggle('-translate-x-full');
+dom.btns.toggleSide.onclick = () => dom.sidebar.classList.toggle('hidden');
+
+// Init Logic
+window.addEventListener('DOMContentLoaded', () => {
+    let usage = parseInt(localStorage.getItem('usage') || '0') + 1;
+    if(usage > 5 && !sessionStorage.getItem('verified')) { /* Verify Logic Here if needed */ }
+    localStorage.setItem('usage', usage);
+    
+    applyTheme(localStorage.getItem('theme') || config.THEME_DEFAULT);
+    startNewChat();
+    updateModelText();
+});
+
+// Theme & Modal Handling Simplified
+const showModal = (el, show) => el.classList.toggle('hidden', !show);
+dom.btns.theme.onclick = () => showModal(dom.themeModal, true);
+$('close-modal-button').onclick = () => showModal(dom.themeModal, false);
+document.querySelectorAll('.theme-option').forEach(b => b.onclick = () => {
+    applyTheme(b.dataset.theme);
+    showModal(dom.themeModal, false);
+});
+
+function applyTheme(theme) {
+    body.className = "flex flex-col h-screen overflow-hidden text-gray-100 transition-colors duration-500 " + (themeColors[theme]?.bg?.join(' ') || "");
+    localStorage.setItem('theme', theme);
+    // Background Image handling logic here if needed
+}
+
+// Model & Feature Toggles
+dom.btns.model.onclick = (e) => { e.stopPropagation(); $('model-popup').classList.toggle('hidden'); };
+function updateModelText() { $('model-button-text-display').innerText = currentModel.name; }
+dom.btns.video.onclick = () => alert("Sắp ra mắt!");
+dom.btns.learn.onclick = () => {
     isTutorMode = !isTutorMode;
     localStorage.setItem('isTutorMode', isTutorMode);
-    updateLearnButtonVisualState();
-});
-
-function updateModelButtonText() {
-    const t = translations[currentLang];
-    if (currentModel && currentModel.model) {
-        textElements.modelBtnText.textContent = currentModel.model;
-    } else {
-        textElements.modelBtnText.textContent = t.modelButtonDefault;
-    }
-}
-
-const createModelButton = (text, description, model, version = '', iconSvg) => {
-    const theme = localStorage.getItem('theme') || 'dark';
-    const themeConfig = themeColors[theme];
-    const button = document.createElement('button');
-    button.className = 'w-full text-left p-2 rounded-lg transition-colors duration-200 flex items-center justify-between btn-interaction';
-    button.classList.add(...themeConfig.popupButton);
-    button.dataset.model = model;
-    if (version) button.dataset.version = version;
-    const leftContainer = document.createElement('div');
-    leftContainer.className = 'flex items-center gap-3';
-    const iconContainer = document.createElement('div');
-    iconContainer.innerHTML = iconSvg;
-    leftContainer.appendChild(iconContainer);
-    const textContainer = document.createElement('div');
-    textContainer.className = 'flex flex-col';
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'font-semibold leading-tight';
-    nameSpan.textContent = text;
-    textContainer.appendChild(nameSpan);
-    const descSpan = document.createElement('span');
-    const descColor = theme === 'light' ? 'text-gray-500' : 'text-gray-400';
-    descSpan.className = `text-xs ${descColor} leading-tight`;
-    descSpan.textContent = description;
-    textContainer.appendChild(descSpan);
-    leftContainer.appendChild(textContainer);
-    button.appendChild(leftContainer);
-    const checkmarkContainer = document.createElement('div');
-    checkmarkContainer.innerHTML = `<svg class="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>`;
-    if (!(currentModel && currentModel.model === model && (!version || currentModel.version === version))) {
-        checkmarkContainer.classList.add('hidden');
-    }
-    button.appendChild(checkmarkContainer);
-    return button;
+    dom.btns.learn.querySelector('svg').style.fill = isTutorMode ? 'currentColor' : 'none';
 };
-
-const showInitialModels = () => {
-    modelPopup.innerHTML = '';
-    const t = translations[currentLang];
-    const iconThunder = `<svg class="w-6 h-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>`;
-    const iconLightbulb = `<svg class="w-6 h-6 text-amber-300" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.311a7.5 7.5 0 01-7.5 0c-1.255 0-2.443-.29-3.5-.832a7.5 7.5 0 0114.5.032c-.318.13-.644.242-.984.326a7.5 7.5 0 01-4.016.033z" /></svg>`;
-    const iconBrain = `<svg class="w-6 h-6 text-pink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>`;
-    const models = [
-        { text: 'Mini', description: t.modelMiniDesc, model: 'Mini', version: '', icon: iconThunder },
-        { text: 'Smart', description: t.modelSmartDesc, model: 'Smart', version: '', icon: iconLightbulb },
-        { text: 'Nerd', description: t.modelNerdDesc, model: 'Nerd', version: '', icon: iconBrain },
-    ];
-    models.forEach(m => {
-        const btn = createModelButton(m.text, m.description, m.model, m.version, m.icon);
-        btn.addEventListener('click', selectModelAndClose);
-        modelPopup.appendChild(btn);
-    });
-};
-
-const selectModelAndClose = (e) => {
-    e.stopPropagation();
-    const button = e.currentTarget;
-    currentModel = {
-        model: button.dataset.model,
-        version: button.dataset.version || null
-    };
-    localStorage.setItem('currentModel', JSON.stringify(currentModel));
-    updateModelButtonText();
-    modelPopup.classList.add('hidden');
-};
-
-modelButton.addEventListener('click', (e) => {
-    e.stopPropagation();
-    showInitialModels();
-    modelPopup.classList.toggle('hidden');
-});
-
-document.addEventListener('click', (e) => {
-    if (!modelButton.contains(e.target) && !modelPopup.contains(e.target)) {
-        modelPopup.classList.add('hidden');
-    }
-});
-
-// === UPDATED: FORMAT AI RESPONSE & FIX REGEX ERROR ===
-function formatAIResponse(text) {
-    let formattedText = text.replace(/^##\s+(.*)$/gm, '<h2 class="text-xl font-bold text-blue-300 mt-4 mb-2 border-b border-gray-500/30 pb-1">$1</h2>');
-    formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    formattedText = formattedText.replace(/\n/g, '<br>');
-    return formattedText;
-}
-
-function createMessageElement(messageContent, sender) {
-    const row = document.createElement('div');
-    row.classList.add('flex', 'w-full', 'mb-4');
-    const messageWrapper = document.createElement('div');
-    const currentTheme = localStorage.getItem('theme') || 'dark';
-    const themeConfig = themeColors[currentTheme];
-    if (sender === 'user') {
-        row.classList.add('justify-end', 'user-message');
-        messageWrapper.classList.add('user-message-wrapper', 'animate-pop-in', 'px-5', 'py-3', 'rounded-3xl', 'max-w-4xl', 'shadow-md', 'flex', 'flex-col', 'gap-2');
-        messageWrapper.classList.add(...themeConfig.userMessage);
-        if (Array.isArray(messageContent)) {
-            messageContent.forEach(part => {
-                if (part.type === 'image_url') {
-                    const img = document.createElement('img');
-                    img.src = part.image_url.url;
-                    img.className = 'rounded-lg max-w-xs';
-                    messageWrapper.appendChild(img);
-                } else if (part.type === 'video_url') {
-                    const video = document.createElement('video');
-                    video.src = part.video_url.url;
-                    video.className = 'rounded-lg max-w-xs';
-                    video.controls = true;
-                    messageWrapper.appendChild(video);
-                } else if (part.type === 'text') {
-                    const textDiv = document.createElement('div');
-                    textDiv.innerHTML = part.text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                    messageWrapper.appendChild(textDiv);
-                }
-            });
-        } else {
-             messageWrapper.innerHTML = messageContent.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        }
-    } else {
-        row.classList.add('justify-start');
-        messageWrapper.classList.add('ai-message-wrapper', 'animate-pop-in', 'max-w-4xl');
-        messageWrapper.classList.add(...themeConfig.aiMessage);
-        messageWrapper.innerHTML = formatAIResponse(messageContent);
-    }
-    row.appendChild(messageWrapper);
-    return row;
-}
-
-// === SYSTEM PROMPT CONFIGURATION (Fix Render Math) ===
-const coreInstructions = `
-QUY TẮC CỐT LÕI (BẮT BUỘC TUÂN THỦ):
-1. **Định dạng Toán học:**
-   - TUYỆT ĐỐI sử dụng cú pháp LaTeX chuẩn.
-   - Công thức cùng dòng (Inline): Dùng cặp dấu $...$ (Ví dụ: $E = mc^2$).
-   - Công thức xuống dòng (Block): Dùng cặp dấu $$...$$ (Ví dụ: $$ x = 5 $$).
-   - KHÔNG sử dụng \\( ... \\) hoặc \\[ ... \\].
-2. **Trình bày văn bản:**
-   - Sử dụng Markdown chuẩn (**in đậm**, tiêu đề...).
-`;
-
-const systemPrompts = {
-    vi: {
-        tutor: `Bạn là Oceep - một Gia Sư AI. Giúp người dùng HIỂU BẢN CHẤT. Hãy kiên nhẫn, giải thích bằng ví dụ thực tế. Sử dụng LaTeX cho công thức toán ($...$ và $$...$$). \n${coreInstructions}`,
-        assistant: `Bạn là Oceep - Trợ lý ảo AI. Giải quyết vấn đề NHANH và CHÍNH XÁC. Trả lời ngắn gọn nhưng đầy đủ. \n${coreInstructions}`
-    },
-    en: {
-        tutor: `You are Oceep, an AI Tutor. Goal: Help users understand concepts deeply. Be patient. Use LaTeX ($...$) for math. \n${coreInstructions}`,
-        assistant: `You are Oceep, an AI Assistant. Be precise and concise. Use LaTeX ($...$) for math. \n${coreInstructions}`
-    },
-    // Giữ tương thích các ngôn ngữ khác, fallback logic có thể áp dụng nếu cần
-    ja: {
-        tutor: "あなたはOceepというAI家庭教師です。数式にはLaTeX ($...$) を使用してください。",
-        assistant: "あなたはFoxAIのOceepです。簡潔に答えてください。数式にはLaTeX ($...$) を使用してください。"
-    },
-    zh: { tutor: "请使用 LaTeX ($...$) 格式。", assistant: "请使用 LaTeX ($...$) 格式。" } 
-};
-
-// ============================================================
-// FIX STREAMING: SMART BUFFER (SỬA LỖI MẤT CHỮ + TRUNCATED)
-// ============================================================
-async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
-    const lang = systemPrompts[currentLang] || systemPrompts['vi']; // Fallback nếu thiếu lang
-    const sysContent = isTutorMode ? lang.tutor : lang.assistant;
-    const allMsgs = [{ role: 'system', content: sysContent }, ...messages];
-    
-    // Config API Local vs Remote
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    // ĐIỀN URL CLOUDFLARE NẾU CHẠY LOCAL:
-    const CLOUDFLARE_URL = ''; 
-    const API = isLocal && CLOUDFLARE_URL ? `${CLOUDFLARE_URL}/api/handler` : '/api/handler';
-
-    try {
-        const res = await fetch(API, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ modelName, messages: allMsgs, max_tokens: 4000, temperature: 0.7 }),
-            signal
-        });
-
-        if(!res.ok) throw new Error("Server Error");
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let fullText = "";
-        
-        // BUFFERING FIX START
-        let buffer = "";
-
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop(); // Giữ lại dòng cuối (chưa trọn vẹn)
-
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (trimmed.startsWith('data: ')) {
-                    const jsonStr = trimmed.slice(6).trim();
-                    if (jsonStr === '[DONE]') break;
-                    try {
-                        const data = JSON.parse(jsonStr);
-                        const txt = data.choices?.[0]?.delta?.content || "";
-                        if (txt) {
-                            fullText += txt;
-                            // Cập nhật text hiển thị
-                            aiMessageEl.firstChild.innerHTML = formatAIResponse(fullText);
-                            if(chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
-                        }
-                    } catch (e) { 
-                        // Dữ liệu JSON chưa đủ -> Bỏ qua chờ nối tiếp ở Buffer
-                    }
-                }
-            }
-        }
-        return fullText;
-
-    } catch (e) {
-        if(e.name !== 'AbortError') {
-            aiMessageEl.firstChild.innerHTML += `<br><span class="text-red-400">⚠️ Lỗi: ${e.message}</span>`;
-        }
-        throw e;
-    }
-}
-
-stopButton.addEventListener('click', () => {
-    if (abortController) abortController.abort();
-});
-
-function setInputActive(isActive) {
-    const t = translations[currentLang];
-    messageInput.disabled = !isActive;
-    const footerButtons = [
-        randomPromptBtn, videoBtn, learnBtn, uploadFileBtn, modelButton
-    ];
-    footerButtons.forEach(btn => btn.disabled = !isActive);
-    if (isActive) {
-        updateTokenUI();
-    } else {
-        messageInput.placeholder = t.aiTypingPlaceholder;
-    }
-}
-
-chatForm.addEventListener('submit', async function(event) {
-    event.preventDefault();
-    const message = messageInput.value.trim();
-    if (!message && !stagedFile) return;
-
-    if (!consumeToken()) {
-        return;
-    }
-
-    if (!initialView.classList.contains('hidden')) {
-        initialView.style.opacity = '0';
-        setTimeout(() => {
-            initialView.classList.add('hidden');
-            chatContainer.classList.remove('hidden');
-            mainContent.classList.remove('justify-center');
-            mainContent.classList.add('justify-start');
-        }, 500);
-    }
-
-    const userMessageContent = [];
-    if (stagedFile) {
-        if (stagedFile.type === 'image') {
-            userMessageContent.push({ type: "image_url", image_url: { url: stagedFile.url } });
-        } else if (stagedFile.type === 'video') {
-            userMessageContent.push({ type: "video_url", video_url: { url: stagedFile.url } });
-        }
-    }
-    if (message) userMessageContent.push({ type: "text", text: message });
-
-    const userMessageEl = createMessageElement(userMessageContent, 'user');
-    chatContainer.appendChild(userMessageEl);
-
-    const historyContent = userMessageContent.length === 1 && userMessageContent[0].type === 'text'
-        ? message
-        : userMessageContent;
-    conversationHistory.push({ role: 'user', content: historyContent });
-    renderHistoryList();
-
-    messageInput.value = '';
-    messageInput.dispatchEvent(new Event('input')); 
-    stagedFile = null;
-    fileThumbnailContainer.innerHTML = '';
-    isRandomPromptUsedInSession = true; 
-    updateRandomButtonVisibility(); 
-    chatContainer.scrollTop = chatContainer.scrollHeight;
-
-    const aiMessageEl = createMessageElement('', 'ai');
-    aiMessageEl.firstChild.classList.add('streaming');
-    chatContainer.appendChild(aiMessageEl);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
-
-    sendButton.classList.add('hidden');
-    soundWaveButton.classList.add('hidden');
-    stopButton.classList.remove('hidden');
-
-    setInputActive(false);
-
-    abortController = new AbortController();
-
-    try {
-        const modelToUse = (currentModel && currentModel.model) ? currentModel.model : 'Mini';
-        const fullAiResponse = await streamAIResponse(modelToUse, conversationHistory, aiMessageEl, abortController.signal);
-        conversationHistory.push({ role: 'assistant', content: fullAiResponse });
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-        saveStateToLocalStorage(); 
-    } catch (error) {
-        // Error already displayed in stream function
-    } finally {
-        aiMessageEl.firstChild.classList.remove('streaming');
-        
-        // --- CHỐT CHẶN: RENDER MATH + REFORMAT ---
-        // Render lại một lần cuối với text đầy đủ để sửa lỗi định dạng nếu có
-        const finalText = conversationHistory[conversationHistory.length - 1].content || aiMessageEl.firstChild.innerText;
-        aiMessageEl.firstChild.innerHTML = formatAIResponse(finalText);
-        
-        // Gọi KaTeX Render sau 50ms để DOM cập nhật
-        setTimeout(() => renderMath(aiMessageEl), 50);
-
-        stopButton.classList.add('hidden');
-        soundWaveButton.classList.remove('hidden');
-        
-        setInputActive(true);
-    }
-});
-
-uploadFileBtn.addEventListener('click', () => fileInput.click());
-
-fileInput.addEventListener('change', (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    if (stagedFile && stagedFile.type === 'video') {
-        URL.revokeObjectURL(stagedFile.url);
-    }
-    stagedFile = null;
-    fileThumbnailContainer.innerHTML = '';
-
-    const removeButtonHTML = `<button id="remove-file-btn" class="absolute top-0 right-0 -mt-2 -mr-2 bg-red-500 text-white rounded-full h-6 w-6 flex items-center justify-center font-bold text-xs btn-interaction">&times;</button>`;
-
-    if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            stagedFile = { file: file, url: e.target.result, type: 'image' };
-            fileThumbnailContainer.innerHTML = `
-                <div class="relative inline-block">
-                    <img src="${stagedFile.url}" class="h-20 w-auto rounded-lg" />
-                    ${removeButtonHTML}
-                </div>
-            `;
-            addRemoveButtonListener();
-        };
-        reader.readAsDataURL(file);
-    } else if (file.type.startsWith('video/')) {
-        const objectURL = URL.createObjectURL(file);
-        stagedFile = { file: file, url: objectURL, type: 'video' };
-        fileThumbnailContainer.innerHTML = `
-            <div class="relative inline-block">
-                <video src="${stagedFile.url}" class="h-20 w-auto rounded-lg" autoplay muted loop playsinline></video>
-                ${removeButtonHTML}
-            </div>
-        `;
-        addRemoveButtonListener();
-    }
-});
-
-function addRemoveButtonListener() {
-    document.getElementById('remove-file-btn').addEventListener('click', () => {
-        if (stagedFile && stagedFile.type === 'video') {
-            URL.revokeObjectURL(stagedFile.url);
-        }
-        stagedFile = null;
-        fileThumbnailContainer.innerHTML = '';
-        fileInput.value = '';
-    });
-}
