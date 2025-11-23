@@ -3,11 +3,11 @@
 // Dễ dàng điều chỉnh các thông số Năng lượng tại đây.                 //
 //=====================================================================//
 const tokenConfig = {
-    IS_INFINITE: true,
-    MAX_TOKENS: 50,
-    TOKEN_COST_PER_MESSAGE: 1,
-    TOKEN_REGEN_INTERVAL_MINUTES: 5,
-    TOKEN_REGEN_AMOUNT: 1,
+    IS_INFINITE: true,          // true: Vô hạn token, false: Có giới hạn
+    MAX_TOKENS: 50,             // Số token tối đa nếu có giới hạn
+    TOKEN_COST_PER_MESSAGE: 1,  // Trừ bao nhiêu token mỗi tin nhắn
+    TOKEN_REGEN_INTERVAL_MINUTES: 5, // Bao lâu hồi lại
+    TOKEN_REGEN_AMOUNT: 1,      // Hồi bao nhiêu mỗi lần
 };
 //=====================================================================//
 
@@ -176,6 +176,75 @@ const themeColors = {
         aiMessage: ['text-white'],
         userMessage: ['bg-blue-500', 'text-white'],
         inputColor: ['text-white', 'placeholder-gray-300']
+    }
+};
+
+// =====================================================================
+// SYSTEM PROMPT CONFIGURATION - ENHANCED
+// =====================================================================
+
+const coreInstructions = `
+QUY TẮC CỐT LÕI (BẮT BUỘC TUÂN THỦ):
+1. **Định dạng Toán học (Quan trọng nhất):**
+   - TUYỆT ĐỐI sử dụng cú pháp LaTeX cho mọi biểu thức toán học.
+   - Công thức cùng dòng (Inline): Dùng cặp dấu $...$ (Ví dụ: $E = mc^2$).
+   - Công thức xuống dòng (Block): Dùng cặp dấu $$...$$ (Ví dụ: $$ x = \frac{-b \pm \sqrt{\Delta}}{2a} $$).
+   - KHÔNG sử dụng \\( \\) hoặc \\[ \\] vì giao diện hiển thị có thể bị lỗi.
+
+2. **Trình bày văn bản:**
+   - Sử dụng Markdown chuẩn. Dùng **in đậm** cho các ý chính, từ khóa.
+   - Sử dụng Tiêu đề (h1, h2, h3) để phân chia nội dung rõ ràng.
+   - Dùng danh sách (bullet points) khi liệt kê để dễ đọc.
+   - Với mã lập trình (Code), PHẢI bọc trong \`\`\`language_name ... \`\`\`.
+
+3. **Kiểm soát chất lượng:**
+   - Suy nghĩ từng bước (Step-by-step reasoning) trước khi đưa ra kết quả cuối cùng để đảm bảo tính logic.
+   - Nếu không chắc chắn về thông tin, hãy thừa nhận trung thực, không bịa đặt (hallucinate).
+`;
+
+const systemPrompts = {
+    vi: {
+        tutor: `Bạn là Oceep - một Giáo Sư AI đẳng cấp thế giới thuộc hệ sinh thái FoxAI.
+Mục tiêu: Giúp người dùng HIỂU BẢN CHẤT vấn đề, không chỉ đưa ra đáp án.
+HƯỚNG DẪN HÀNH VI:
+1. Phong cách: Kiên nhẫn, sư phạm, khích lệ.
+2. Phương pháp: Giải thích khái niệm bằng ví dụ thực tế. Sau khi giải thích, hãy đặt câu hỏi gợi mở.
+3. Khi giải bài tập: KHÔNG ĐƯA ĐÁP ÁN NGAY. Hãy hướng dẫn từng bước.
+${coreInstructions}`,
+        assistant: `Bạn là Oceep - Trợ lý ảo AI thông minh, toàn năng thuộc hệ sinh thái FoxAI.
+Mục tiêu: Giải quyết vấn đề NHANH, CHÍNH XÁC và ĐẦY ĐỦ.
+HƯỚNG DẪN HÀNH VI:
+1. Phong cách: Chuyên nghiệp, trực diện.
+2. Trả lời đầy đủ bối cảnh, góc nhìn đa chiều.
+${coreInstructions}`
+    },
+    en: {
+        tutor: `You are Oceep, a world-class AI Tutor. Goal: Help users deeply understand concepts. Be patient, use Socratic methods. Strictly follow LaTeX rules: $...$ for inline, $$...$$ for blocks. ${coreInstructions}`,
+        assistant: `You are Oceep, a powerful virtual assistant. Provide comprehensive, accurate, and structured responses. Strictly follow LaTeX rules: $...$ for inline, $$...$$ for blocks. ${coreInstructions}`
+    },
+    zh: {
+        tutor: "你是 Oceep，FoxAI 的世界级 AI 导师。要有耐心，解释概念背后的原因。使用 LaTeX $...$ 进行数学计算。",
+        assistant: "你是 Oceep，FoxAI 的强大助手。回答全面、准确且结构清晰。严格遵循 LaTeX 格式。"
+    },
+    hi: {
+        tutor: "आप Oceep हैं, FoxAI द्वारा एक एआई ट्यूटर। धैर्य रखें और अवधारणाओं को समझाएं। गणित के लिए LaTeX $...$ का उपयोग करें।",
+        assistant: "आप Oceep हैं, FoxAI के सहायक। व्यापक और सटीक उत्तर दें। गणित के लिए LaTeX $...$ का सख्ती से पालन करें।"
+    },
+    es: {
+        tutor: "Eres Oceep, un tutor de IA de clase mundial. Sé paciente y explica el 'por qué'. Usa LaTeX $...$ para matemáticas.",
+        assistant: "Eres Oceep, un asistente poderoso. Proporciona respuestas completas y precisas. Usa LaTeX $...$ para matemáticas."
+    },
+    fr: {
+        tutor: "Vous êtes Oceep, un tuteur IA. Soyez patient, expliquez les concepts en profondeur. Utilisez LaTeX $...$ pour les maths.",
+        assistant: "Vous êtes Oceep, un assistant puissant de FoxAI. Fournissez des réponses complètes et structurées. Respectez LaTeX."
+    },
+    ja: {
+        tutor: "あなたはFoxAIのAI家庭教師、Oceepです。答えを教えるだけでなく、概念を深く理解できるように忍耐強く説明してください。数式には必ずLaTeX $...$ を使用してください。",
+        assistant: "あなたはFoxAIの強力なアシスタント、Oceepです。包括的かつ正確で、構造化された回答を提供してください。数式には厳密にLaTeX $...$ を使用してください。"
+    },
+    it: {
+        tutor: "Sei Oceep, un tutor AI. Spiega i concetti passo dopo passo. Usa LaTeX $...$ per la matematica.",
+        assistant: "Sei Oceep, un assistente potente. Fornisci risposte complete e precise. Usa LaTeX $...$ per la matematica."
     }
 };
 
@@ -544,30 +613,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // BẢO MẬT: KIỂM TRA SỐ LẦN SỬ DỤNG
     // ==========================================
     function checkSecurityGate() {
-        // Lấy số lần đã dùng từ bộ nhớ
         let usageCount = parseInt(localStorage.getItem('appUsageCount') || '0');
-        
-        // Tăng số lần dùng lên 1
         usageCount++;
-        
-        console.log("Số lần dùng: " + usageCount);
-
-        // Nếu dùng >= 5 lần thì chặn lại và bắt verify
+        // console.log("Số lần dùng: " + usageCount);
         if (usageCount >= 5) {
-            // Lưu lại số lần (để nếu back lại vẫn bị chặn)
             localStorage.setItem('appUsageCount', usageCount);
-            // Chuyển hướng sang trang verify
             window.location.href = 'verify.html';
         } else {
-            // Nếu chưa đến 5 lần thì lưu số mới và cho dùng tiếp
             localStorage.setItem('appUsageCount', usageCount);
         }
     }
-
     // Chạy kiểm tra ngay khi vào App
     checkSecurityGate();
-    // ==========================================
-    // KẾT THÚC PHẦN BẢO MẬT
     // ==========================================
 
     const savedTheme = localStorage.getItem('theme') || 'dark';
@@ -619,20 +676,21 @@ function handleUpdateLog() {
     const updateLogModal = document.getElementById('update-log-modal');
     const closeUpdateLogBtn = document.getElementById('close-update-log');
     const dontShowAgainCheckbox = document.getElementById('dont-show-again');
-    const updateLogVersion = '1.0.3'; // Đã tăng version
+    const updateLogVersion = '1.0.3'; 
     const hasSeenUpdate = localStorage.getItem('seenUpdateLogVersion');
 
-    if (hasSeenUpdate !== updateLogVersion) showModal(updateLogModal, true);
+    if (hasSeenUpdate !== updateLogVersion && updateLogModal) showModal(updateLogModal, true);
 
     const closeAndSavePreference = () => {
         if (dontShowAgainCheckbox.checked) localStorage.setItem('seenUpdateLogVersion', updateLogVersion);
         showModal(updateLogModal, false);
     };
-
-    closeUpdateLogBtn.addEventListener('click', closeAndSavePreference);
-    updateLogModal.addEventListener('click', (e) => {
-        if(e.target === updateLogModal) closeAndSavePreference();
-    });
+    if (closeUpdateLogBtn) closeUpdateLogBtn.addEventListener('click', closeAndSavePreference);
+    if (updateLogModal) {
+        updateLogModal.addEventListener('click', (e) => {
+            if(e.target === updateLogModal) closeAndSavePreference();
+        });
+    }
 }
 
 function initTokenSystem() {
@@ -929,28 +987,8 @@ function createMessageElement(messageContent, sender) {
     return row;
 }
 
-// === UPDATED: SYSTEM PROMPTS ===
-const systemPrompts = {
-    vi: {
-        tutor: "Bạn là Oceep, một gia sư AI thân thiện. Nhiệm vụ: giải thích khái niệm phức tạp một cách dễ hiểu. Sử dụng LaTeX cho công thức toán ($...$).",
-        assistant: `Bạn là Oceep, trợ lý ảo của FoxAI. Hãy trả lời ngắn gọn, đúng trọng tâm. Sử dụng LaTeX cho công thức toán ($...$).`
-    },
-    en: {
-        tutor: "You are Oceep, a friendly AI tutor. Explain complex concepts simply. Use LaTeX $...$ for math.",
-        assistant: "You are Oceep by FoxAI. Answer concisely. Use LaTeX $...$ for math."
-    },
-    ja: {
-        tutor: "あなたはOceepというAI家庭教師です。数式にはLaTeX ($...$) を使用してください。",
-        assistant: "あなたはFoxAIのOceepです。簡潔に答えてください。数式にはLaTeX ($...$) を使用してください。"
-    },
-    it: {
-        tutor: "Sei Oceep, un tutor AI. Usa LaTeX $...$ per la matematica.",
-        assistant: "Sei Oceep di FoxAI. Rispondi concisamente. Usa LaTeX $...$ per la matematica."
-    }
-};
-
 // ============================================================
-// MAIN FIX FOR CONNECTION AND STREAMING ERRORS (Cloudflare Version)
+// MAIN STREAMING LOGIC (Cloudflare Adaptation)
 // ============================================================
 async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const langPrompts = systemPrompts[currentLang] || systemPrompts['en'];
@@ -958,23 +996,18 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const systemMessage = { role: 'system', content: systemContent };
     const messagesWithSystemPrompt = [systemMessage, ...messages];
     
-    // --- URL CONFIGURATION FOR CLOUDFLARE ---
-    // Khi deploy lên Cloudflare Pages, file script.js sẽ gọi về cùng domain (/api/handler)
-    // Nếu chạy Localhost, bạn cần điền URL của dự án Cloudflare Pages vào biến bên dưới.
-    
+    // Config cho môi trường Localhost hoặc Production
     const isLocal = window.location.hostname === 'localhost' || 
                     window.location.hostname === '127.0.0.1' ||
                     window.location.protocol === 'file:';
 
-    // ⚠️ NẾU TEST LOCAL: Điền URL Cloudflare Pages của bạn vào đây (ví dụ: 'https://oceep-chat.pages.dev')
-    // Nếu đã Deploy lên mạng thì để trống cũng được.
+    // ⚠️ Nếu test Local, điền URL dự án Cloudflare của bạn vào đây (vd: 'https://du-an.pages.dev')
+    // Nếu để trống khi chạy local, nó có thể không tìm thấy API.
     const CLOUDFLARE_PROJECT_URL = ''; 
 
     const API_URL = isLocal && CLOUDFLARE_PROJECT_URL 
         ? `${CLOUDFLARE_PROJECT_URL}/api/handler` 
         : '/api/handler';
-
-    console.log(`[System] Requesting: ${modelName} via ${API_URL}`);
 
     try {
         const response = await fetch(API_URL, {
@@ -983,8 +1016,8 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
             body: JSON.stringify({
                 modelName: modelName,
                 messages: messagesWithSystemPrompt,
-                max_tokens: 4000, // Tăng giới hạn token lên cao để không bị cắt chữ
-                temperature: 0.7  // Cân bằng độ sáng tạo
+                max_tokens: 4000, 
+                temperature: 0.7 
             }),
             signal
         });
@@ -996,13 +1029,10 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
                 try {
                     const errorData = JSON.parse(errorBody);
                     if (errorData.error) errorMsg = errorData.error;
-                    if (errorData.details) errorMsg += ` - ${errorData.details}`;
-                } catch (parseError) {
-                    if (errorBody) errorMsg = errorBody.substring(0, 200);
+                } catch (e) {
+                    if (errorBody) errorMsg = errorBody.substring(0, 100);
                 }
-            } catch (readError) {
-                console.error("Could not read error response", readError);
-            }
+            } catch (e) {}
             throw new Error(errorMsg);
         }
 
@@ -1025,8 +1055,6 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
                         if (content) {
                             fullResponseText += content;
                             aiMessageEl.firstChild.innerHTML = formatAIResponse(fullResponseText);
-                            
-                            // Auto-scroll xuống dưới cùng khi đang viết
                             const chatContainer = document.getElementById('chat-container');
                             if(chatContainer) {
                                 chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -1040,21 +1068,16 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
 
     } catch (error) {
         if (error.name === 'AbortError') return aiMessageEl.firstChild.innerText;
-        
-        console.error("Connection Error Details:", error);
+        console.error("Stream Error:", error);
         
         let userMsg = "Đã có lỗi xảy ra.";
-        
         if (error.message.includes('Failed to fetch')) {
              userMsg = isLocal 
-                ? "Lỗi kết nối. Nếu bạn đang chạy Local, hãy điền URL Cloudflare Pages vào biến CLOUDFLARE_PROJECT_URL trong script.js." 
-                : "Không thể kết nối đến Server. Vui lòng kiểm tra lại đường truyền.";
-        } else if (error.message.includes('404')) {
-            userMsg = "Lỗi 404: Không tìm thấy API. Hãy đảm bảo bạn đã deploy code lên Cloudflare Pages đúng cấu trúc (functions/api/handler.js).";
+                ? "Lỗi kết nối. (Localhost cần CLOUDFLARE_PROJECT_URL)." 
+                : "Không thể kết nối Server.";
         } else {
             userMsg = `Lỗi: ${error.message}`;
         }
-        
         aiMessageEl.firstChild.innerHTML = `<span class="text-red-400">${userMsg}</span>`;
         throw error;
     }
@@ -1083,9 +1106,7 @@ chatForm.addEventListener('submit', async function(event) {
     const message = messageInput.value.trim();
     if (!message && !stagedFile) return;
 
-    if (!consumeToken()) {
-        return;
-    }
+    if (!consumeToken()) return;
 
     if (!initialView.classList.contains('hidden')) {
         initialView.style.opacity = '0';
@@ -1132,7 +1153,6 @@ chatForm.addEventListener('submit', async function(event) {
     sendButton.classList.add('hidden');
     soundWaveButton.classList.add('hidden');
     stopButton.classList.remove('hidden');
-    
     setInputActive(false);
 
     abortController = new AbortController();
@@ -1144,8 +1164,7 @@ chatForm.addEventListener('submit', async function(event) {
         chatContainer.scrollTop = chatContainer.scrollHeight;
         saveStateToLocalStorage(); 
     } catch (error) {
-        // Error handled inside streamAIResponse, message already displayed.
-        // Just cleanup UI here.
+        // Error handling already in streamAIResponse
     } finally {
         aiMessageEl.firstChild.classList.remove('streaming');
         // KATE X RENDER TRIGGER
@@ -1153,7 +1172,6 @@ chatForm.addEventListener('submit', async function(event) {
 
         stopButton.classList.add('hidden');
         soundWaveButton.classList.remove('hidden');
-        
         setInputActive(true);
     }
 });
