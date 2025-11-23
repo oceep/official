@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bảo mật - Oceep</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Script Cloudflare Turnstile -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Hiệu ứng logo phát sáng nhẹ */
+        .glow-text {
+            text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col justify-center items-center bg-gradient-to-br from-[#212935] to-black text-white">
+
+    <!-- Container chính -->
+    <div class="flex flex-col items-center gap-8 animate-bounce-in">
+        
+        <!-- Logo Oceep -->
+        <div class="flex items-center gap-3">
+             <svg width="60" height="60" viewBox="0 0 100 100">
+                <defs>
+                    <radialGradient id="bubbleGradient" cx="0.3" cy="0.3" r="0.7">
+                        <stop offset="0%" style="stop-color:rgb(220,240,255);stop-opacity:1" />
+                        <stop offset="100%" style="stop-color:rgb(51, 149, 240);stop-opacity:1" />
+                    </radialGradient>
+                </defs>
+                <circle cx="50" cy="50" r="45" fill="url(#bubbleGradient)" stroke="rgba(255,255,255,0.7)" stroke-width="3"/>
+                <path d="M 35 30 A 25 25 0 0 1 60 55" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="5" stroke-linecap="round"/>
+            </svg>
+            <h1 class="text-6xl font-bold text-blue-400 glow-text tracking-tighter">ceep</h1>
+        </div>
+
+        <p class="text-gray-400 text-sm">Vui lòng xác minh bạn là con người để tiếp tục.</p>
+
+        <!-- Cloudflare Turnstile Widget -->
+        <!-- data-callback: Hàm sẽ chạy khi verify thành công -->
+        <div class="cf-turnstile" 
+             data-sitekey="1x00000000000000000000AA" 
+             data-callback="onVerifySuccess" 
+             data-theme="dark">
+        </div>
+
+        <p id="redirect-msg" class="text-green-400 text-sm font-semibold opacity-0 transition-opacity duration-500">
+            Xác minh thành công! Đang quay lại...
+        </p>
+    </div>
+
+    <script>
+        // Hàm được gọi tự động khi Cloudflare verify xong (dấu tích xanh)
+        function onVerifySuccess(token) {
+            // 1. Hiển thị thông báo
+            document.getElementById('redirect-msg').classList.remove('opacity-0');
+
+            // 2. Reset bộ đếm số lần sử dụng về 0
+            localStorage.setItem('appUsageCount', '0');
+            
+            // 3. Đánh dấu thời điểm verify lần cuối (để bảo mật thêm nếu cần)
+            localStorage.setItem('lastVerified', Date.now());
+
+            // 4. Chờ 1 giây cho mượt rồi chuyển hướng về App chính
+            setTimeout(() => {
+                window.location.href = 'index.html'; // Tên file app chính của bạn
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
