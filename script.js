@@ -429,6 +429,21 @@ function updateRandomButtonVisibility() {
     }
 }
 
+// === KATE X RENDERING FUNCTION ===
+function renderMath(element) {
+    if (window.renderMathInElement) {
+        renderMathInElement(element, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false},
+                {left: '\\(', right: '\\)', display: false},
+                {left: '\\[', right: '\\]', display: true}
+            ],
+            throwOnError: false
+        });
+    }
+}
+
 function renderHistoryList() {
     historyList.innerHTML = '';
     const currentTheme = localStorage.getItem('theme') || 'dark';
@@ -500,8 +515,8 @@ function loadChatHistory(chatId) {
             const el = createMessageElement(msg.content, msg.role);
             chatContainer.appendChild(el);
          });
-         // Render MathJax khi load lịch sử
-         if (window.MathJax) MathJax.typesetPromise([chatContainer]);
+         // Render KaTeX khi load lịch sử
+         renderMath(chatContainer);
     } else {
          initialView.classList.remove('hidden');
          chatContainer.classList.add('hidden');
@@ -573,7 +588,7 @@ function handleUpdateLog() {
     const updateLogModal = document.getElementById('update-log-modal');
     const closeUpdateLogBtn = document.getElementById('close-update-log');
     const dontShowAgainCheckbox = document.getElementById('dont-show-again');
-    const updateLogVersion = '1.0.2';
+    const updateLogVersion = '1.0.3'; // Đã tăng version
     const hasSeenUpdate = localStorage.getItem('seenUpdateLogVersion');
 
     if (hasSeenUpdate !== updateLogVersion) showModal(updateLogModal, true);
@@ -834,18 +849,10 @@ languageOptionButtons.forEach(button => {
 });
 
 // === UPDATED FUNCTION: FORMAT AI RESPONSE ===
-// Fixes visual issues and supports ## headers
 function formatAIResponse(text) {
-    // 1. Xử lý Tiêu đề (## Heading)
-    // Regex tìm chuỗi bắt đầu bằng ## và thay thế bằng thẻ h2 được style đẹp mắt, to, in đậm, màu xanh
     let formattedText = text.replace(/^##\s+(.*)$/gm, '<h2 class="text-xl font-bold text-blue-300 mt-4 mb-2 border-b border-gray-500/30 pb-1">$1</h2>');
-    
-    // 2. Xử lý In đậm (**Bold**)
     formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-    // 3. Xử lý Xuống dòng (\n thành <br>)
     formattedText = formattedText.replace(/\n/g, '<br>');
-
     return formattedText;
 }
 
@@ -891,24 +898,23 @@ function createMessageElement(messageContent, sender) {
     return row;
 }
 
-// === UPDATED: SYSTEM PROMPTS (Simplified & Strict) ===
-// Fixes grammar issues by being concise and clear
+// === UPDATED: SYSTEM PROMPTS ===
 const systemPrompts = {
     vi: {
-        tutor: "Bạn là Oceep, một gia sư AI thân thiện. Nhiệm vụ: giải thích khái niệm phức tạp một cách dễ hiểu. Sử dụng LaTeX \\( ... \\) cho công thức toán.",
-        assistant: `Bạn là Oceep, trợ lý ảo của FoxAI. Hãy trả lời ngắn gọn, đúng trọng tâm. Sử dụng LaTeX \\( ... \\) cho công thức toán.`
+        tutor: "Bạn là Oceep, một gia sư AI thân thiện. Nhiệm vụ: giải thích khái niệm phức tạp một cách dễ hiểu. Sử dụng LaTeX cho công thức toán ($...$).",
+        assistant: `Bạn là Oceep, trợ lý ảo của FoxAI. Hãy trả lời ngắn gọn, đúng trọng tâm. Sử dụng LaTeX cho công thức toán ($...$).`
     },
     en: {
-        tutor: "You are Oceep, a friendly AI tutor. Explain complex concepts simply. Use LaTeX \\( ... \\) for math.",
-        assistant: "You are Oceep by FoxAI. Answer concisely. Use LaTeX \\( ... \\) for math."
+        tutor: "You are Oceep, a friendly AI tutor. Explain complex concepts simply. Use LaTeX $...$ for math.",
+        assistant: "You are Oceep by FoxAI. Answer concisely. Use LaTeX $...$ for math."
     },
     ja: {
-        tutor: "あなたはOceepというAI家庭教師です。正確な日本語を使ってください。見出しには「##」を使用し、数式にはLaTeXを使用してください。",
-        assistant: "あなたはFoxAIのOceepです。簡潔に答えてください。正確な日本語を使い、見出しには「##」を使用してください。"
+        tutor: "あなたはOceepというAI家庭教師です。数式にはLaTeX ($...$) を使用してください。",
+        assistant: "あなたはFoxAIのOceepです。簡潔に答えてください。数式にはLaTeX ($...$) を使用してください。"
     },
     it: {
-        tutor: "Sei Oceep, un tutor AI. Usa una grammatica perfetta. Usa '##' per le intestazioni. Usa LaTeX per la matematica.",
-        assistant: "Sei Oceep di FoxAI. Rispondi concisamente. Usa una grammatica perfetta. Usa '##' per le intestazioni."
+        tutor: "Sei Oceep, un tutor AI. Usa LaTeX $...$ per la matematica.",
+        assistant: "Sei Oceep di FoxAI. Rispondi concisamente. Usa LaTeX $...$ per la matematica."
     }
 };
 
@@ -1111,8 +1117,8 @@ chatForm.addEventListener('submit', async function(event) {
         // Just cleanup UI here.
     } finally {
         aiMessageEl.firstChild.classList.remove('streaming');
-        // Render MathJax khi AI trả lời xong
-        if (window.MathJax) MathJax.typesetPromise([aiMessageEl]);
+        // KATE X RENDER TRIGGER
+        renderMath(aiMessageEl);
 
         stopButton.classList.add('hidden');
         soundWaveButton.classList.remove('hidden');
