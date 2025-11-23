@@ -7,11 +7,21 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Đã xóa script Turnstile -->
-
+    <!-- CẤU HÌNH MATHJAX MỚI (Hỗ trợ $ và $$ tự động) -->
     <script>
-      MathJax = {
-        tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }
+      window.MathJax = {
+        tex: {
+          // Thêm dấu '$' và '$$' vào danh sách nhận diện
+          inlineMath: [['$', '$'], ['\\(', '\\)']], 
+          displayMath: [['$$', '$$'], ['\\[', '\\]']],
+          processEscapes: true, // Cho phép dùng \$ để hiển thị dấu $ tiền tệ
+        },
+        svg: {
+          fontCache: 'global'
+        },
+        options: {
+          enableMenu: false 
+        }
       };
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
@@ -124,8 +134,6 @@
                     <form id="chat-form" class="relative flex flex-col bg-black/30 backdrop-blur-lg rounded-3xl shadow-lg p-1 border border-white/20">
                         <div id="file-thumbnail-container" class="px-2 pt-2"></div>
                         
-                        <!-- ĐÃ XÓA WIDGET CAPTCHA Ở ĐÂY -->
-                        
                         <div class="flex items-start w-full mt-1">
                             <input type="text" id="message-input" placeholder="Bạn muốn biết gì?" autocomplete="off" class="flex-grow bg-transparent border-none focus:ring-0 focus:outline-none text-lg pl-5 pt-3 pb-3 text-gray-200 placeholder-gray-500">
 
@@ -194,8 +202,6 @@
         </div>
 </div>
 
-<!-- Theme Modal -->
-<!-- (GIỮ NGUYÊN PHẦN MODAL NHƯ CŨ) -->
 <div id="theme-modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
     <div id="modal-content" class="bg-white/90 backdrop-blur-lg dark:bg-black/80 rounded-2xl shadow-2xl p-6 w-full max-w-2xl border border-gray-300 dark:border-white/20">
         <h2 id="theme-modal-title" class="text-xl font-bold mb-5 text-gray-800 dark:text-white text-center">Chọn Giao Diện</h2>
@@ -244,9 +250,9 @@
         <h2 class="text-2xl font-bold mb-4 text-center">Có gì mới?</h2>
         <div class="space-y-3 text-sm max-h-60 overflow-y-auto pr-2">
             <ul class="list-disc list-inside pl-2 space-y-1">
+                <li><strong>Toán học:</strong> Tự động hiển thị công thức (MathJax) khi AI trả lời.</li>
                 <li><strong>Bảo mật:</strong> Đã kích hoạt kiểm tra trình duyệt (Managed Challenge).</li>
                 <li><strong>Sửa lỗi:</strong> Khắc phục lỗi cắt câu trả lời.</li>
-                <li><strong>Hệ thống Token:</strong> Tối ưu hóa việc hồi năng lượng.</li>
             </ul>
         </div>
         <div class="mt-6 flex items-center justify-between">
