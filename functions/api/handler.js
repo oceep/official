@@ -24,7 +24,7 @@ export async function onRequestPost(context) {
         const apiConfig = {
             'Mini': {
                 key: env.MINI_API_KEY,
-                model: 'deepseek/deepseek-r1:free'
+                model: 'meituan/longcat-flash-chat:free'
             },
             'Smart': {
                 key: env.SMART_API_KEY,
