@@ -500,6 +500,7 @@ function loadChatHistory(chatId) {
             const el = createMessageElement(msg.content, msg.role);
             chatContainer.appendChild(el);
          });
+         // Render MathJax khi load lịch sử
          if (window.MathJax) MathJax.typesetPromise([chatContainer]);
     } else {
          initialView.classList.remove('hidden');
@@ -1110,6 +1111,7 @@ chatForm.addEventListener('submit', async function(event) {
         // Just cleanup UI here.
     } finally {
         aiMessageEl.firstChild.classList.remove('streaming');
+        // Render MathJax khi AI trả lời xong
         if (window.MathJax) MathJax.typesetPromise([aiMessageEl]);
 
         stopButton.classList.add('hidden');
