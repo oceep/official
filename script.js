@@ -2,7 +2,6 @@
 
 //=====================================================================//
 // NEW: ENERGY CONFIGURATION BOX                                       //
-// Dễ dàng điều chỉnh các thông số Năng lượng tại đây.                 //
 //=====================================================================//
 const tokenConfig = {
     IS_INFINITE: true,          // true: Vô hạn token, false: Có giới hạn
@@ -615,13 +614,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // BẢO MẬT: KIỂM TRA SỐ LẦN SỬ DỤNG
     // ==========================================
     function checkSecurityGate() {
+        // 1. Lấy ngưỡng giới hạn (limit) hiện tại
+        let verificationLimit = localStorage.getItem('verificationLimit');
+
+        // Nếu chưa có limit (lần đầu chạy hoặc vừa reset), tạo random từ 2-7
+        if (!verificationLimit) {
+            verificationLimit = Math.floor(Math.random() * (7 - 2 + 1)) + 2;
+            localStorage.setItem('verificationLimit', verificationLimit);
+        } else {
+            verificationLimit = parseInt(verificationLimit);
+        }
+
+        // 2. Lấy số lần đã dùng
         let usageCount = parseInt(localStorage.getItem('appUsageCount') || '0');
         usageCount++;
-        // console.log("Số lần dùng: " + usageCount);
-        if (usageCount >= 5) {
-            localStorage.setItem('appUsageCount', usageCount);
-            // window.location.href = 'verify.html'; // Uncomment để bật tính năng chuyển trang
+
+        // console.log(`Usage: ${usageCount} / ${verificationLimit}`); // Debug nếu cần
+
+        // 3. Kiểm tra
+        if (usageCount >= verificationLimit) {
+            // Đã đạt ngưỡng -> Reset và Chuyển trang
+            localStorage.setItem('appUsageCount', '0'); // Reset đếm
+            localStorage.removeItem('verificationLimit'); // Xóa limit để lần sau tạo số ngẫu nhiên mới
+            window.location.href = 'verify.html';
         } else {
+            // Chưa đạt -> Lưu lại
             localStorage.setItem('appUsageCount', usageCount);
         }
     }
@@ -990,11 +1007,13 @@ function createMessageElement(messageContent, sender) {
 }
 
 // ============================================================
-// MAIN BUFFERING LOGIC (Thay cho Streaming cũ)
+// LOGIC TYPEWRITER SỬA LỖI LAYOUT
 // ============================================================
 
-// Hàm tạo hiệu ứng đánh máy để người dùng không cảm thấy bị giật cục
 async function typeWriterEffect(text, element) {
+    // XÓA SẠCH DẤU ... TRƯỚC KHI BẮT ĐẦU
+    element.innerHTML = ''; 
+    
     const words = text.split(/(?=\s)/g); 
     let currentText = "";
     const speed = 10; // Tốc độ đánh máy (ms)
@@ -1002,12 +1021,10 @@ async function typeWriterEffect(text, element) {
     for (const word of words) {
         currentText += word;
         element.innerHTML = formatAIResponse(currentText);
-        // Tự động cuộn xuống
         const chatContainer = document.getElementById('chat-container');
         if(chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
         await new Promise(r => setTimeout(r, speed));
     }
-    // Đảm bảo hiển thị lần cuối chuẩn xác
     element.innerHTML = formatAIResponse(text);
 }
 
@@ -1022,7 +1039,7 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
                     window.location.hostname === '127.0.0.1' ||
                     window.location.protocol === 'file:';
 
-    // ⚠️ Nếu test Local, điền URL dự án Cloudflare của bạn vào đây (vd: 'https://du-an.pages.dev')
+    // ⚠️ Nếu test Local, điền URL dự án Cloudflare của bạn vào đây
     const CLOUDFLARE_PROJECT_URL = ''; 
 
     const API_URL = isLocal && CLOUDFLARE_PROJECT_URL 
@@ -1030,7 +1047,7 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
         : '/api/handler';
 
     try {
-        // Hiển thị trạng thái đang tải
+        // Hiển thị trạng thái đang tải (dấu ...)
         aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse">...</span>';
 
         const response = await fetch(API_URL, {
@@ -1054,11 +1071,11 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
             throw new Error(errorMsg);
         }
 
-        // Nhận toàn bộ JSON (Buffer Mode)
+        // Nhận dữ liệu
         const data = await response.json();
         const fullText = data.content;
 
-        // Chạy hiệu ứng đánh máy
+        // Xóa sạch ... và chạy chữ
         await typeWriterEffect(fullText, aiMessageEl.firstChild);
         return fullText;
 
@@ -1137,7 +1154,7 @@ chatForm.addEventListener('submit', async function(event) {
     chatContainer.scrollTop = chatContainer.scrollHeight;
 
     const aiMessageEl = createMessageElement('', 'ai');
-    aiMessageEl.firstChild.classList.add('streaming'); // Class này giữ nguyên để blink con trỏ nếu cần
+    aiMessageEl.firstChild.classList.add('streaming'); 
     chatContainer.appendChild(aiMessageEl);
     chatContainer.scrollTop = chatContainer.scrollHeight;
     
@@ -1156,10 +1173,9 @@ chatForm.addEventListener('submit', async function(event) {
         chatContainer.scrollTop = chatContainer.scrollHeight;
         saveStateToLocalStorage(); 
     } catch (error) {
-        // Error handling already in streamAIResponse
+        // Error handling
     } finally {
         aiMessageEl.firstChild.classList.remove('streaming');
-        // KATE X RENDER TRIGGER
         renderMath(aiMessageEl);
 
         stopButton.classList.add('hidden');
