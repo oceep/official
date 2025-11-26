@@ -1,13 +1,13 @@
 // File: functions/api/handler.js
 
-// Cấu hình CORS Header
+// Cấu hình CORS Header để cho phép gọi từ frontend
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Title',
 };
 
-// Xử lý yêu cầu OPTIONS (Preflight cho CORS)
+// Xử lý yêu cầu OPTIONS (Preflight cho CORS - bắt buộc phải có)
 export async function onRequestOptions() {
     return new Response(null, { status: 204, headers: corsHeaders });
 }
@@ -17,10 +17,11 @@ export async function onRequestPost(context) {
     const { request, env } = context;
 
     try {
-        // Đọc dữ liệu gửi lên
+        // 1. Đọc dữ liệu gửi lên từ Frontend
         const { modelName, messages, max_tokens, temperature } = await request.json();
 
-        // Cấu hình API Keys (Lấy từ biến môi trường của Cloudflare)
+        // 2. Cấu hình API Keys (Lấy từ biến môi trường của Cloudflare Pages)
+        // Bạn nhớ vào Settings -> Environment Variables trên Cloudflare để điền key nhé
         const apiConfig = {
             'Mini': {
                 key: env.MINI_API_KEY,
@@ -38,7 +39,7 @@ export async function onRequestPost(context) {
 
         const config = apiConfig[modelName];
         
-        // Kiểm tra cấu hình
+        // Kiểm tra xem đã có cấu hình cho model này chưa
         if (!config || !config.key) {
             return new Response(
                 JSON.stringify({ error: `Chưa cấu hình API Key cho model '${modelName}' trên Cloudflare Pages.` }),
@@ -46,7 +47,7 @@ export async function onRequestPost(context) {
             );
         }
 
-        // Gọi sang OpenRouter (Hoặc Provider khác)
+        // 3. Gọi sang OpenRouter API
         const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
         
         const apiResponse = await fetch(API_URL, {
@@ -54,18 +55,19 @@ export async function onRequestPost(context) {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${config.key}`,
-                'HTTP-Referer': 'https://oceep.pages.dev/', // Thay bằng domain của bạn
+                'HTTP-Referer': 'https://oceep.pages.dev/', // Thay bằng domain thật của bạn nếu muốn
                 'X-Title': 'Oceep'
             },
             body: JSON.stringify({
                 model: config.model,
                 messages: messages,
-                stream: true, // Quan trọng: Bật Streaming
-                max_tokens: max_tokens || 3000, // Giới hạn token
+                stream: false, // QUAN TRỌNG: Tắt streaming để chuyển sang chế độ Buffer
+                max_tokens: max_tokens || 3000,
                 temperature: temperature || 0.7
             }),
         });
 
+        // Xử lý lỗi từ OpenRouter nếu có
         if (!apiResponse.ok) {
             const errText = await apiResponse.text();
             return new Response(
@@ -74,21 +76,22 @@ export async function onRequestPost(context) {
             );
         }
 
-        // STREAMING: Truyền trực tiếp luồng dữ liệu về Client
-        // Kỹ thuật này giúp Cloudflare không cần đợi, tránh timeout
-        const { readable, writable } = new TransformStream();
-        apiResponse.body.pipeTo(writable);
+        // 4. Lấy dữ liệu JSON trọn vẹn
+        const data = await apiResponse.json();
+        
+        // Lấy nội dung text từ response chuẩn của OpenAI format
+        const content = data.choices?.[0]?.message?.content || "";
 
-        return new Response(readable, {
-            headers: {
+        // 5. Trả về JSON cho Frontend
+        return new Response(JSON.stringify({ content: content }), {
+            headers: { 
                 ...corsHeaders,
-                'Content-Type': 'text/event-stream',
-                'Cache-Control': 'no-cache',
-                'Connection': 'keep-alive',
+                'Content-Type': 'application/json'
             },
         });
 
     } catch (error) {
+        // Bắt lỗi hệ thống (ví dụ lỗi code, lỗi server)
         return new Response(
             JSON.stringify({ error: 'Lỗi Server Cloudflare', details: error.message }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
