@@ -1,3 +1,5 @@
+// script.js
+
 //=====================================================================//
 // NEW: ENERGY CONFIGURATION BOX                                       //
 // Dễ dàng điều chỉnh các thông số Năng lượng tại đây.                 //
@@ -618,7 +620,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // console.log("Số lần dùng: " + usageCount);
         if (usageCount >= 5) {
             localStorage.setItem('appUsageCount', usageCount);
-            window.location.href = 'verify.html';
+            // window.location.href = 'verify.html'; // Uncomment để bật tính năng chuyển trang
         } else {
             localStorage.setItem('appUsageCount', usageCount);
         }
@@ -988,8 +990,27 @@ function createMessageElement(messageContent, sender) {
 }
 
 // ============================================================
-// MAIN STREAMING LOGIC (Cloudflare Adaptation)
+// MAIN BUFFERING LOGIC (Thay cho Streaming cũ)
 // ============================================================
+
+// Hàm tạo hiệu ứng đánh máy để người dùng không cảm thấy bị giật cục
+async function typeWriterEffect(text, element) {
+    const words = text.split(/(?=\s)/g); 
+    let currentText = "";
+    const speed = 10; // Tốc độ đánh máy (ms)
+
+    for (const word of words) {
+        currentText += word;
+        element.innerHTML = formatAIResponse(currentText);
+        // Tự động cuộn xuống
+        const chatContainer = document.getElementById('chat-container');
+        if(chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
+        await new Promise(r => setTimeout(r, speed));
+    }
+    // Đảm bảo hiển thị lần cuối chuẩn xác
+    element.innerHTML = formatAIResponse(text);
+}
+
 async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const langPrompts = systemPrompts[currentLang] || systemPrompts['en'];
     const systemContent = isTutorMode ? langPrompts.tutor : langPrompts.assistant;
@@ -1002,7 +1023,6 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
                     window.location.protocol === 'file:';
 
     // ⚠️ Nếu test Local, điền URL dự án Cloudflare của bạn vào đây (vd: 'https://du-an.pages.dev')
-    // Nếu để trống khi chạy local, nó có thể không tìm thấy API.
     const CLOUDFLARE_PROJECT_URL = ''; 
 
     const API_URL = isLocal && CLOUDFLARE_PROJECT_URL 
@@ -1010,6 +1030,9 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
         : '/api/handler';
 
     try {
+        // Hiển thị trạng thái đang tải
+        aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse">...</span>';
+
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1025,59 +1048,27 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
         if (!response.ok) {
             let errorMsg = `Server Error (${response.status})`;
             try {
-                const errorBody = await response.text(); 
-                try {
-                    const errorData = JSON.parse(errorBody);
-                    if (errorData.error) errorMsg = errorData.error;
-                } catch (e) {
-                    if (errorBody) errorMsg = errorBody.substring(0, 100);
-                }
+                const errorData = await response.json();
+                if (errorData.error) errorMsg = errorData.error;
             } catch (e) {}
             throw new Error(errorMsg);
         }
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder('utf-8');
-        let fullResponseText = "";
+        // Nhận toàn bộ JSON (Buffer Mode)
+        const data = await response.json();
+        const fullText = data.content;
 
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const jsonString = line.substring(6).trim();
-                    if (jsonString === '[DONE]') break;
-                    try {
-                        const data = JSON.parse(jsonString);
-                        const content = data.choices?.[0]?.delta?.content || "";
-                        if (content) {
-                            fullResponseText += content;
-                            aiMessageEl.firstChild.innerHTML = formatAIResponse(fullResponseText);
-                            const chatContainer = document.getElementById('chat-container');
-                            if(chatContainer) {
-                                chatContainer.scrollTop = chatContainer.scrollHeight;
-                            }
-                        }
-                    } catch (e) { }
-                }
-            }
-        }
-        return fullResponseText;
+        // Chạy hiệu ứng đánh máy
+        await typeWriterEffect(fullText, aiMessageEl.firstChild);
+        return fullText;
 
     } catch (error) {
         if (error.name === 'AbortError') return aiMessageEl.firstChild.innerText;
-        console.error("Stream Error:", error);
+        console.error("Fetch Error:", error);
         
-        let userMsg = "Đã có lỗi xảy ra.";
-        if (error.message.includes('Failed to fetch')) {
-             userMsg = isLocal 
-                ? "Lỗi kết nối. (Localhost cần CLOUDFLARE_PROJECT_URL)." 
-                : "Không thể kết nối Server.";
-        } else {
-            userMsg = `Lỗi: ${error.message}`;
-        }
+        let userMsg = translations[currentLang]?.errorPrefix || "Đã có lỗi xảy ra.";
+        if (error.message) userMsg += ` (${error.message})`;
+        
         aiMessageEl.firstChild.innerHTML = `<span class="text-red-400">${userMsg}</span>`;
         throw error;
     }
@@ -1146,7 +1137,7 @@ chatForm.addEventListener('submit', async function(event) {
     chatContainer.scrollTop = chatContainer.scrollHeight;
 
     const aiMessageEl = createMessageElement('', 'ai');
-    aiMessageEl.firstChild.classList.add('streaming');
+    aiMessageEl.firstChild.classList.add('streaming'); // Class này giữ nguyên để blink con trỏ nếu cần
     chatContainer.appendChild(aiMessageEl);
     chatContainer.scrollTop = chatContainer.scrollHeight;
     
@@ -1160,6 +1151,7 @@ chatForm.addEventListener('submit', async function(event) {
     try {
         const modelToUse = (currentModel && currentModel.model) ? currentModel.model : 'Mini';
         const fullAiResponse = await streamAIResponse(modelToUse, conversationHistory, aiMessageEl, abortController.signal);
+        
         conversationHistory.push({ role: 'assistant', content: fullAiResponse });
         chatContainer.scrollTop = chatContainer.scrollHeight;
         saveStateToLocalStorage(); 
