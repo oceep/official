@@ -33,7 +33,7 @@ export async function onRequestPost(context) {
             },
             'Nerd': {
                 key: env.NERD_API_KEY,
-                model: 'x-ai/grok-4.1-fast'
+                model: 'x-ai/grok-4.1-fast:free'
             }
         };
 
