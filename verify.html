@@ -73,7 +73,6 @@
         }
 
         // Logic tự vệ: Nếu người dùng vào trang này mà không bị khóa, tự đẩy về index
-        // (Tránh trường hợp người dùng tò mò vào xem chơi)
         if (localStorage.getItem('isLocked') !== 'true') {
              window.location.href = 'index.html';
         }
