@@ -1,6 +1,16 @@
 // script.js
 
 //=====================================================================//
+// LOGIC BẢO MẬT: KHÓA CỬA (CHỐNG BYPASS)                              //
+//=====================================================================//
+// Kiểm tra ngay lập tức khi file JS chạy. Nếu đang bị khóa, đá về verify.
+if (localStorage.getItem('isLocked') === 'true') {
+    window.location.href = 'verify.html';
+    throw new Error("App is locked requiring verification."); // Dừng thực thi code phía dưới
+}
+//=====================================================================//
+
+//=====================================================================//
 // NEW: ENERGY CONFIGURATION BOX                                       //
 //=====================================================================//
 const tokenConfig = {
@@ -213,7 +223,10 @@ HƯỚNG DẪN HÀNH VI:
 3. Khi giải bài tập: KHÔNG ĐƯA ĐÁP ÁN NGAY. Hãy hướng dẫn từng bước.
 ${coreInstructions}`,
         assistant: `Bạn là Oceep - Trợ lý ảo AI thông minh, toàn năng thuộc hệ sinh thái FoxAI.
-Mục tiêu: Giải quyết vấn đề NHANH, CHÍNH XÁC.
+Mục tiêu: Giải quyết vấn đề NHANH, CHÍNH XÁC và ĐẦY ĐỦ.
+HƯỚNG DẪN HÀNH VI:
+1. Phong cách: Chuyên nghiệp, trực diện.
+2. Trả lời đầy đủ bối cảnh, góc nhìn đa chiều.
 ${coreInstructions}`
     },
     en: {
@@ -626,13 +639,10 @@ document.addEventListener('DOMContentLoaded', () => {
         let usageCount = parseInt(localStorage.getItem('appUsageCount') || '0');
         usageCount++;
 
-        // console.log(`Usage: ${usageCount} / ${verificationLimit}`); // Debug nếu cần
-
         // 3. Kiểm tra
         if (usageCount >= verificationLimit) {
-            // Đã đạt ngưỡng -> Reset và Chuyển trang
-            localStorage.setItem('appUsageCount', '0'); // Reset đếm
-            localStorage.removeItem('verificationLimit'); // Xóa limit để lần sau tạo số ngẫu nhiên mới
+            // Đã đạt ngưỡng -> Khóa ngay lập tức và Chuyển trang
+            localStorage.setItem('isLocked', 'true'); // <--- KHÓA LẠI
             window.location.href = 'verify.html';
         } else {
             // Chưa đạt -> Lưu lại
