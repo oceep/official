@@ -3,7 +3,6 @@
 //=====================================================================//
 // LOGIC BẢO MẬT: KHÓA CỬA (CHỐNG BYPASS)                              //
 //=====================================================================//
-// Kiểm tra ngay lập tức khi file JS chạy. Nếu đang bị khóa, đá về verify.
 if (localStorage.getItem('isLocked') === 'true') {
     window.location.href = 'verify.html';
     throw new Error("App is locked requiring verification."); // Dừng thực thi code phía dưới
