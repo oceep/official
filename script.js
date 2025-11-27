@@ -1,7 +1,7 @@
 // script.js
 
 //=====================================================================//
-// LOGIC BẢO MẬT: KHÓA CỬA (CHỐNG BYPASS)                              //
+// LOGIC BẢO MẬT: KHÓA CỬA (CHỐNG BYPASS)                             //
 //=====================================================================//
 if (localStorage.getItem('isLocked') === 'true') {
     window.location.href = 'verify.html';
