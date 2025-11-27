@@ -1,11 +1,12 @@
 // script.js
 
 //=====================================================================//
-// LOGIC BẢO MẬT: KHÓA CỬA (CHỐNG BYPASS)                             //
+// LOGIC BẢO MẬT: KHÓA CỬA (CHỐNG BYPASS)                              //
 //=====================================================================//
+// Kiểm tra ngay lập tức khi file JS chạy. Nếu đang bị khóa, đá về verify.
 if (localStorage.getItem('isLocked') === 'true') {
     window.location.href = 'verify.html';
-    throw new Error("App is locked requiring verification."); // Dừng thực thi code phía dưới
+    throw new Error("App is locked requiring verification."); 
 }
 //=====================================================================//
 
@@ -924,16 +925,38 @@ const showInitialModels = () => {
     });
 };
 
+// ============================================================
+// LOGIC CHỌN MODEL & AUTO REFRESH (KHÔNG TÍNH VÀO COUNTER)
+// ============================================================
 const selectModelAndClose = (e) => {
     e.stopPropagation();
     const button = e.currentTarget;
-    currentModel = {
-        model: button.dataset.model,
-        version: button.dataset.version || null
-    };
-    localStorage.setItem('currentModel', JSON.stringify(currentModel));
-    updateModelButtonText();
+    
+    const newModelName = button.dataset.model;
+    const newModelVersion = button.dataset.version || null;
+
+    // Kiểm tra xem có thực sự đổi model không
+    const isDifferent = currentModel.model !== newModelName || currentModel.version !== newModelVersion;
+
+    if (isDifferent) {
+        // 1. Cập nhật Model
+        currentModel = {
+            model: newModelName,
+            version: newModelVersion
+        };
+        localStorage.setItem('currentModel', JSON.stringify(currentModel));
+        updateModelButtonText();
+
+        // 2. TỰ ĐỘNG REFRESH (Start New Chat)
+        // Lưu ý: startNewChat() chỉ reset giao diện, KHÔNG reload trang
+        // -> Vì không reload trang nên DOMContentLoaded không chạy lại
+        // -> Do đó, không bị tính vào bộ đếm Security Gate.
+        startNewChat(); 
+    }
+
     modelPopup.classList.add('hidden');
+    // Re-render để cập nhật dấu tích xanh
+    showInitialModels();
 };
 
 modelButton.addEventListener('click', (e) => {
