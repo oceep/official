@@ -17,12 +17,12 @@ function getCurrentTime() {
     return `Thời gian hiện tại ở Việt Nam: ${now.toLocaleString('vi-VN', options)}`;
 }
 
-// Tool: Lấy thông tin địa điểm & Tạo link Google Map
+// Tool: Lấy thông tin địa điểm & Tạo link Google Map (Dùng Nominatim - Miễn phí)
 async function getPlaceInfo(query) {
     try {
-        // Gọi API tìm kiếm của OpenStreetMap (Miễn phí)
         const searchUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=1&accept-language=vi`;
         
+        // Nominatim bắt buộc có User-Agent
         const res = await fetch(searchUrl, {
             headers: { 'User-Agent': 'OceepChatbot/1.0' }
         });
@@ -33,7 +33,7 @@ async function getPlaceInfo(query) {
         const place = data[0];
         const address = place.display_name;
         
-        // Tạo link Google Maps chuẩn
+        // Tạo link Google Maps
         const googleMapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 
         return `Thông tin địa điểm '${query}':
@@ -46,7 +46,7 @@ async function getPlaceInfo(query) {
     }
 }
 
-// Tool: Lấy thời tiết (Open-Meteo)
+// Tool: Lấy thời tiết (Open-Meteo - Miễn phí)
 async function getWeather(locationQuery) {
     try {
         const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationQuery)}&count=1&language=vi&format=json`;
@@ -68,7 +68,7 @@ async function getWeather(locationQuery) {
     } catch (e) { return null; }
 }
 
-// Tool: Lấy giá Crypto (CoinGecko)
+// Tool: Lấy giá Crypto (CoinGecko - Miễn phí)
 async function getCryptoPrice(coinName) {
     try {
         const mapping = { 'bitcoin': 'bitcoin', 'btc': 'bitcoin', 'eth': 'ethereum', 'sol': 'solana', 'doge': 'dogecoin', 'bnb': 'binancecoin' };
@@ -126,3 +126,67 @@ export async function onRequestPost(context) {
                 if (placeInfo) systemInjection += `\n[MAP DATA]: ${placeInfo}`;
             }
         }
+
+        // 2. Kiểm tra Thời gian
+        if (lastMsg.includes('mấy giờ') || lastMsg.includes('hôm nay') || lastMsg.includes('time') || lastMsg.includes('date')) {
+            systemInjection += `\n[SYSTEM INFO]: ${getCurrentTime()}`;
+        }
+
+        // 3. Kiểm tra Thời tiết
+        if (lastMsg.includes('thời tiết') || lastMsg.includes('weather')) {
+            let location = "Hanoi";
+            if (lastMsg.includes('tại') || lastMsg.includes('in')) {
+                const parts = lastMsg.split(/tại|in/);
+                if (parts.length > 1) location = parts[1].trim().replace(/[?!.]/g, '');
+            }
+            const weatherInfo = await getWeather(location);
+            if (weatherInfo) systemInjection += `\n[WEATHER DATA]: ${weatherInfo}`;
+        }
+
+        // 4. Kiểm tra Coin
+        if (lastMsg.includes('giá') && (lastMsg.includes('btc') || lastMsg.includes('eth') || lastMsg.includes('sol'))) {
+            let coin = 'bitcoin';
+            if (lastMsg.includes('eth')) coin = 'ethereum';
+            if (lastMsg.includes('sol')) coin = 'solana';
+            const priceInfo = await getCryptoPrice(coin);
+            if (priceInfo) systemInjection += `\n[CRYPTO DATA]: ${priceInfo}`;
+        }
+
+        // --- CHÈN DỮ LIỆU VÀO MESSAGES ---
+        let finalMessages = [...messages];
+        if (systemInjection) {
+            finalMessages[finalMessages.length - 1].content += `\n\n--- THÔNG TIN THỰC TẾ HỆ THỐNG CUNG CẤP: ---\n${systemInjection}`;
+        }
+
+        // --- GỌI OPENROUTER ---
+        const apiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${config.key}`,
+                'HTTP-Referer': 'https://oceep.pages.dev/',
+                'X-Title': 'Oceep'
+            },
+            body: JSON.stringify({
+                model: config.model,
+                messages: finalMessages,
+                stream: false,
+                max_tokens: max_tokens || 3000,
+                temperature: temperature || 0.7
+            }),
+        });
+
+        if (!apiResponse.ok) {
+            const errText = await apiResponse.text();
+            return new Response(JSON.stringify({ error: 'OpenRouter Error', details: errText }), { status: apiResponse.status, headers: corsHeaders });
+        }
+
+        const data = await apiResponse.json();
+        return new Response(JSON.stringify({ content: data.choices?.[0]?.message?.content || "" }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+
+    } catch (error) {
+        return new Response(JSON.stringify({ error: 'Server Error', details: error.message }), { status: 500, headers: corsHeaders });
+    }
+}
