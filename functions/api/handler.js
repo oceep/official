@@ -7,53 +7,62 @@ const corsHeaders = {
 };
 
 // ==========================================
-// 1. CÁC TOOL HỖ TRỢ (THỜI TIẾT, MAP,...)
+// 1. CÁC HÀM CÔNG CỤ (TOOLS)
 // ==========================================
 
-// Lấy giờ VN
+// Tool: Lấy giờ VN
 function getCurrentTime() {
     const now = new Date();
     const options = { timeZone: 'Asia/Ho_Chi_Minh', hour12: false, weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' };
     return now.toLocaleString('vi-VN', options);
 }
 
-// Lấy bản đồ (Nominatim)
-async function getPlaceInfo(query) {
+// Tool: Tìm tọa độ từ tên địa điểm (Dùng Nominatim - Cực chuẩn cho VN)
+async function getCoordinates(query) {
     try {
-        const searchUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=1&accept-language=vi`;
+        const searchUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&accept-language=vi`;
         const res = await fetch(searchUrl, { headers: { 'User-Agent': 'OceepChatbot/1.0' } });
         const data = await res.json();
         if (!data || data.length === 0) return null;
-        const place = data[0];
-        // Tạo link Google Map
-        const googleMapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.display_name)}`;
-        return `Địa điểm: ${place.display_name}\nLink bản đồ: ${googleMapsLink}`;
+        return {
+            lat: data[0].lat,
+            lon: data[0].lon,
+            name: data[0].display_name
+        };
     } catch (e) { return null; }
 }
 
-// Lấy thời tiết (Open-Meteo) - QUAN TRỌNG
+// Tool: Lấy bản đồ
+async function getPlaceInfo(query) {
+    const coords = await getCoordinates(query);
+    if (!coords) return null;
+    const googleMapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(coords.name)}`;
+    return `Địa điểm: ${coords.name}\nLink bản đồ: ${googleMapsLink}`;
+}
+
+// Tool: Lấy thời tiết (Kết hợp Nominatim + Open-Meteo)
 async function getWeather(locationQuery) {
     try {
-        // 1. Tìm tọa độ
-        const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationQuery)}&count=1&language=vi&format=json`;
-        const geoRes = await fetch(geoUrl);
-        const geoData = await geoRes.json();
+        // B1: Tìm tọa độ bằng Nominatim (Khôn hơn Open-Meteo Geocoding)
+        const coords = await getCoordinates(locationQuery);
+        
+        // Nếu không tìm thấy, thử fallback về Hà Nội nếu query rỗng, hoặc trả về null
+        if (!coords) {
+            // Nếu người dùng hỏi trống không "thời tiết thế nào", mặc định HN
+            if (!locationQuery || locationQuery.length < 3) return await getWeather("Hà Nội"); 
+            return null;
+        }
 
-        if (!geoData.results || geoData.results.length === 0) return null;
-
-        const { latitude, longitude, name, country } = geoData.results[0];
-
-        // 2. Lấy thời tiết
-        const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&timezone=auto`;
+        // B2: Gọi API Thời tiết bằng tọa độ vừa tìm được
+        const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&timezone=auto`;
         const weatherRes = await fetch(weatherUrl);
         const weatherData = await weatherRes.json();
         
         const current = weatherData.current;
-        // Mã thời tiết (WMO Code)
         const codes = { 0: "Trời quang đãng ☀️", 1: "Nhiều mây 🌤️", 2: "Mây rải rác ☁️", 3: "U ám ☁️", 45: "Sương mù 🌫️", 51: "Mưa phùn 🌧️", 61: "Mưa nhỏ 🌧️", 63: "Mưa vừa 🌧️", 80: "Mưa rào ⛈️", 95: "Dông bão ⛈️" };
         const condition = codes[current.weather_code] || "Không xác định";
 
-        return `Dữ liệu thời tiết mới nhất tại ${name}, ${country}:
+        return `Dữ liệu thời tiết tại [${coords.name}]:
 - Tình trạng: ${condition}
 - Nhiệt độ: ${current.temperature_2m}°C (Cảm giác như ${current.apparent_temperature}°C)
 - Độ ẩm: ${current.relative_humidity_2m}%
@@ -61,6 +70,7 @@ async function getWeather(locationQuery) {
     } catch (e) { return null; }
 }
 
+// Tool: Crypto
 async function getCryptoPrice(coinName) {
     try {
         const mapping = { 'bitcoin': 'bitcoin', 'btc': 'bitcoin', 'eth': 'ethereum', 'sol': 'solana', 'doge': 'dogecoin', 'bnb': 'binancecoin' };
@@ -74,7 +84,7 @@ async function getCryptoPrice(coinName) {
 }
 
 // ==========================================
-// 2. LOGIC XỬ LÝ (HANDLER)
+// 2. XỬ LÝ REQUEST
 // ==========================================
 
 export async function onRequestOptions() {
@@ -87,6 +97,7 @@ export async function onRequestPost(context) {
     try {
         const { modelName, messages, max_tokens, temperature } = await request.json();
 
+        // Config API Key
         const apiConfig = {
             'Mini': { key: env.MINI_API_KEY, model: 'openai/gpt-oss-20b:free' },
             'Smart': { key: env.SMART_API_KEY, model: 'google/gemini-flash-1.5-8b' },
@@ -94,84 +105,72 @@ export async function onRequestPost(context) {
         };
 
         const config = apiConfig[modelName];
-        if (!config || !config.key) {
-            return new Response(JSON.stringify({ error: `Chưa cấu hình API Key cho model '${modelName}'` }), { status: 400, headers: corsHeaders });
-        }
+        if (!config || !config.key) return new Response(JSON.stringify({ error: `Chưa cấu hình API Key` }), { status: 400, headers: corsHeaders });
 
-        // --- PHÂN TÍCH VÀ INJECT DỮ LIỆU ---
+        // --- PHÂN TÍCH Ý ĐỊNH ---
         const lastMsgObj = messages[messages.length - 1];
         const lastMsg = lastMsgObj.content.toLowerCase();
         let systemInjection = "";
 
-        // 1. Check Thời tiết (Tự động mặc định Hà Nội nếu không nói rõ)
-        if (lastMsg.includes('thời tiết') || lastMsg.includes('weather') || lastMsg.includes('nhiệt độ') || lastMsg.includes('mưa không')) {
-            let location = "Hanoi"; // Mặc định là Hà Nội
-            
-            // Logic tìm tên địa điểm đơn giản
-            const keywords = ['tại', 'ở', 'in', 'khu vực', 'tp', 'thành phố'];
-            for (const kw of keywords) {
-                if (lastMsg.includes(kw)) {
-                    // Lấy phần sau từ khóa (ví dụ: "ở Đà Nẵng" -> "Đà Nẵng")
-                    const parts = lastMsg.split(kw);
-                    if (parts.length > 1) {
-                        let potentialLoc = parts[1].trim().replace(/[?!.]/g, '');
-                        if (potentialLoc.length > 1) location = potentialLoc;
-                    }
-                }
-            }
-            
+        // 1. Xử lý Thời tiết (Cải tiến Logic tách từ khóa)
+        if (lastMsg.includes('thời tiết') || lastMsg.includes('weather') || lastMsg.includes('nhiệt độ') || lastMsg.includes('mưa')) {
+            // Loại bỏ các từ khóa nhiễu để lấy tên địa điểm sạch
+            let location = lastMsg
+                .replace('thời tiết', '')
+                .replace('weather', '')
+                .replace('nhiệt độ', '')
+                .replace('dự báo', '')
+                .replace('tại', '')
+                .replace('ở', '')
+                .replace('khu vực', '')
+                .replace('in', '')
+                .trim(); // Xóa khoảng trắng thừa
+
+            // Xóa dấu câu
+            location = location.replace(/[?!.,]/g, '');
+
+            // Nếu sau khi xóa mà chuỗi rỗng (vd user chỉ chat "thời tiết"), gán mặc định HN
+            if (location.length < 2) location = "Hà Nội";
+
             const weatherInfo = await getWeather(location);
-            if (weatherInfo) {
-                systemInjection += `\n[THÔNG TIN THỜI TIẾT THỰC TẾ]:\n${weatherInfo}\n`;
-            }
+            if (weatherInfo) systemInjection += `\n[THÔNG TIN THỜI TIẾT THỰC TẾ TỪ SERVER]:\n${weatherInfo}\n`;
         }
 
-        // 2. Check Bản đồ
-        if (lastMsg.includes('bản đồ') || lastMsg.includes('chỉ đường') || lastMsg.includes('ở đâu') || lastMsg.includes('đường đến')) {
-            let query = lastMsg;
-            const keywords = ['đến', 'tại', 'ở', 'to', 'of', 'location'];
-            for (const kw of keywords) {
-                if (lastMsg.includes(kw)) {
-                    const parts = lastMsg.split(kw);
-                    if (parts.length > 1) query = parts[1].trim().replace(/[?!.]/g, '');
-                }
-            }
+        // 2. Xử lý Bản đồ
+        else if (lastMsg.includes('bản đồ') || lastMsg.includes('chỉ đường') || lastMsg.includes('ở đâu') || lastMsg.includes('đường đến')) {
+            let query = lastMsg
+                .replace('bản đồ', '')
+                .replace('chỉ đường', '')
+                .replace('ở đâu', '')
+                .replace('đường đến', '')
+                .replace('tại', '')
+                .replace('ở', '')
+                .trim().replace(/[?!.,]/g, '');
+            
             if (query.length > 2) {
                 const placeInfo = await getPlaceInfo(query);
                 if (placeInfo) systemInjection += `\n[THÔNG TIN VỊ TRÍ]:\n${placeInfo}\n`;
             }
         }
 
-        // 3. Check Ngày giờ
-        if (lastMsg.includes('giờ') || lastMsg.includes('ngày') || lastMsg.includes('hôm nay')) {
+        // 3. Thời gian
+        else if (lastMsg.includes('giờ') || lastMsg.includes('ngày') || lastMsg.includes('hôm nay')) {
             systemInjection += `\n[THỜI GIAN HIỆN TẠI]: ${getCurrentTime()}\n`;
         }
 
-        // 4. Check Coin
-        if (lastMsg.includes('giá') && (lastMsg.includes('btc') || lastMsg.includes('eth') || lastMsg.includes('sol'))) {
-            let coin = 'bitcoin';
-            if (lastMsg.includes('eth')) coin = 'ethereum';
-            if (lastMsg.includes('sol')) coin = 'solana';
+        // 4. Coin
+        else if (lastMsg.includes('giá') && (lastMsg.includes('btc') || lastMsg.includes('eth'))) {
+            let coin = lastMsg.includes('eth') ? 'ethereum' : 'bitcoin';
             const priceInfo = await getCryptoPrice(coin);
             if (priceInfo) systemInjection += `\n[GIÁ CRYPTO]: ${priceInfo}\n`;
         }
 
-        // --- CỰC KỲ QUAN TRỌNG: CHÈN VÀO ĐẦU TIN NHẮN ---
-        // Thay vì chèn cuối, ta chèn vào ĐẦU (Prepend) để AI chú ý nhất
+        // --- INJECT DỮ LIỆU VÀO ĐẦU TIN NHẮN ---
         let finalMessages = [...messages];
-        
         if (systemInjection) {
-            const contextInstruction = `
-=== DỮ LIỆU HỆ THỐNG CUNG CẤP (REAL-TIME) ===
-${systemInjection}
-=============================================
-YÊU CẦU: Hãy sử dụng dữ liệu trên để trả lời câu hỏi của người dùng một cách tự nhiên.
-Nếu là thời tiết, hãy báo nhiệt độ và tình trạng.
----------------------------------------------
-CÂU HỎI CỦA NGƯỜI DÙNG:
-`;
-            // Sửa nội dung tin nhắn cuối cùng của User
-            finalMessages[finalMessages.length - 1].content = contextInstruction + lastMsgObj.content;
+            // Ép AI phải đóng vai là người đã biết thông tin này
+            const instruction = `HỆ THỐNG CUNG CẤP DỮ LIỆU THỰC TẾ SAU ĐÂY. BẠN PHẢI DÙNG NÓ ĐỂ TRẢ LỜI NGƯỜI DÙNG. TUYỆT ĐỐI KHÔNG NÓI LÀ KHÔNG BIẾT.\n${systemInjection}\n----------------\nCÂU HỎI CỦA USER: `;
+            finalMessages[finalMessages.length - 1].content = instruction + lastMsgObj.content;
         }
 
         // --- GỌI OPENROUTER ---
@@ -196,7 +195,6 @@ CÂU HỎI CỦA NGƯỜI DÙNG:
             const errText = await apiResponse.text();
             return new Response(JSON.stringify({ error: 'OpenRouter Error', details: errText }), { status: apiResponse.status, headers: corsHeaders });
         }
-
         const data = await apiResponse.json();
         return new Response(JSON.stringify({ content: data.choices?.[0]?.message?.content || "" }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
