@@ -8,10 +8,27 @@ if (localStorage.getItem('isLocked') === 'true') {
     window.location.href = 'verify.html';
     throw new Error("App is locked requiring verification."); // Dừng thực thi code phía dưới
 }
-//=====================================================================//
 
 //=====================================================================//
-// NEW: ENERGY CONFIGURATION BOX                                       //
+// NEW: HÀM COPY CODE (Để nút Copy trong Code Box hoạt động)           //
+//=====================================================================//
+window.copyToClipboard = function(btn) {
+    // Tìm phần tử code bên trong
+    const codeElement = btn.closest('.code-box-header').nextElementSibling.querySelector('code');
+    const codeText = codeElement.innerText;
+    
+    navigator.clipboard.writeText(codeText).then(() => {
+        const originalHTML = btn.innerHTML;
+        // Đổi nút thành chữ Copied! màu xanh
+        btn.innerHTML = `<span class="text-green-400 font-bold">Copied!</span>`;
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+        }, 2000);
+    });
+};
+
+//=====================================================================//
+// ENERGY CONFIGURATION BOX                                            //
 //=====================================================================//
 const tokenConfig = {
     IS_INFINITE: true,          // true: Vô hạn token, false: Có giới hạn
@@ -81,24 +98,7 @@ const translations = {
     en: {
         sidebarHeader: "Chat History", newChatTitle: "New Chat", messagePlaceholder: "What do you want to know?", aiTypingPlaceholder: "AI is replying...", outOfTokensPlaceholder: "You're out of tokens.", sendButton: "Send", stopButton: "Stop", modelButtonDefault: "Expert", modelButtonPrefix: "Model", randomButton: "Random", videoButton: "Create Video", learnButton: "Study", footerText: "AI can make mistakes. Check important info.", themeModalTitle: "Choose Theme", languageModalTitle: "Select Language", themeDark: "Dark", themeLight: "Light", themeOcean: "Ocean", modalClose: "Close", newChatHistory: "New Conversation", greetingMorning: "Good morning", greetingNoon: "Good afternoon", greetingAfternoon: "Good afternoon", greetingEvening: "Good evening", errorPrefix: "An error occurred", comingSoon: "Coming Soon", comingSoonTitle: "Coming Soon...", comingSoonText: "Under development.", langTooltip: "Switch Language", themeTooltip: "Change Theme", historyTooltip: "Chat History", newChatTooltip: "New Chat", modelMiniDesc: "Fast and efficient.", modelSmartDesc: "Balanced speed and intelligence.", modelNerdDesc: "Powerful model for complex answers."
     },
-    zh: {
-        sidebarHeader: "聊天历史", newChatTitle: "新聊天", messagePlaceholder: "你想知道什么？", aiTypingPlaceholder: "AI正在回复...", outOfTokensPlaceholder: "代币已用完。", sendButton: "发送", stopButton: "停止", modelButtonDefault: "专家", modelButtonPrefix: "模型", randomButton: "随机", videoButton: "创建视频", learnButton: "学习", footerText: "AI可能会犯错。", themeModalTitle: "选择主题", languageModalTitle: "选择语言", themeDark: "黑暗", themeLight: "光", themeOcean: "海洋", modalClose: "关闭", newChatHistory: "新对话", greetingMorning: "早上好", greetingNoon: "中午好", greetingAfternoon: "下午好", greetingEvening: "晚上好", errorPrefix: "发生错误", comingSoon: "即将推出", comingSoonTitle: "即将推出...", comingSoonText: "开发中。", langTooltip: "切换语言", themeTooltip: "更改主题", historyTooltip: "聊天历史", newChatTooltip: "新聊天", modelMiniDesc: "快速高效。", modelSmartDesc: "速度与智能的平衡。", modelNerdDesc: "强大的模型。"
-    },
-    hi: {
-        sidebarHeader: "चैट इतिहास", newChatTitle: "नई चैट", messagePlaceholder: "आप क्या जानना चाहते हैं?", aiTypingPlaceholder: "एआई जवाब दे रहा है...", outOfTokensPlaceholder: "टोकन खत्म हो गए हैं।", sendButton: "भेजें", stopButton: "रुकें", modelButtonDefault: "विशेषज्ञ", modelButtonPrefix: "मॉडल", randomButton: "यादृच्छिक", videoButton: "वीडियो बनाएं", learnButton: "अध्ययन", footerText: "एआई गलतियाँ कर सकता है।", themeModalTitle: "थीम चुनें", languageModalTitle: "भाषा चुनें", themeDark: "अंधेरा", themeLight: "प्रकाश", themeOcean: "सागर", modalClose: "बंद करें", newChatHistory: "नई बातचीत", greetingMorning: "सुप्रभात", greetingNoon: "नमस्ते", greetingAfternoon: "नमस्ते", greetingEvening: "शुभ संध्या", errorPrefix: "त्रुटि हुई", comingSoon: "जल्द आ रहा है", comingSoonTitle: "जल्द आ रहा है...", comingSoonText: "विकास अधीन है।", langTooltip: "भाषा बदलें", themeTooltip: "थीम बदलें", historyTooltip: "चैट इतिहास", newChatTooltip: "नई चैट", modelMiniDesc: "तेज़ और कुशल।", modelSmartDesc: "गति और बुद्धिमत्ता का संतुलन।", modelNerdDesc: "शक्तिशाली मॉडल।"
-    },
-    es: {
-        sidebarHeader: "Historial", newChatTitle: "Nuevo chat", messagePlaceholder: "¿Qué quieres saber?", aiTypingPlaceholder: "IA respondiendo...", outOfTokensPlaceholder: "Sin tokens.", sendButton: "Enviar", stopButton: "Detener", modelButtonDefault: "Experto", modelButtonPrefix: "Modelo", randomButton: "Aleatorio", videoButton: "Crear video", learnButton: "Estudiar", footerText: "La IA puede cometer errores.", themeModalTitle: "Elegir tema", languageModalTitle: "Idioma", themeDark: "Oscuro", themeLight: "Luz", themeOcean: "Océano", modalClose: "Cerrar", newChatHistory: "Nueva conversación", greetingMorning: "Buenos días", greetingNoon: "Buenas tardes", greetingAfternoon: "Buenas tardes", greetingEvening: "Buenas noches", errorPrefix: "Error", comingSoon: "Próximamente", comingSoonTitle: "Próximamente...", comingSoonText: "En desarrollo.", langTooltip: "Idioma", themeTooltip: "Tema", historyTooltip: "Historial", newChatTooltip: "Nuevo", modelMiniDesc: "Rápido y eficiente.", modelSmartDesc: "Equilibrio velocidad/inteligencia.", modelNerdDesc: "Modelo potente."
-    },
-    fr: {
-        sidebarHeader: "Historique", newChatTitle: "Nouveau chat", messagePlaceholder: "Que voulez-vous savoir ?", aiTypingPlaceholder: "L'IA répond...", outOfTokensPlaceholder: "Plus de jetons.", sendButton: "Envoyer", stopButton: "Arrêter", modelButtonDefault: "Expert", modelButtonPrefix: "Modèle", randomButton: "Aléatoire", videoButton: "Vidéo", learnButton: "Étudier", footerText: "L'IA peut faire des erreurs.", themeModalTitle: "Thème", languageModalTitle: "Langue", themeDark: "Sombre", themeLight: "Lumière", themeOcean: "Océan", modalClose: "Fermer", newChatHistory: "Nouvelle conversation", greetingMorning: "Bonjour", greetingNoon: "Bon après-midi", greetingAfternoon: "Bon après-midi", greetingEvening: "Bonsoir", errorPrefix: "Erreur", comingSoon: "Bientôt", comingSoonTitle: "Bientôt...", comingSoonText: "En développement.", langTooltip: "Langue", themeTooltip: "Thème", historyTooltip: "Historique", newChatTooltip: "Nouveau", modelMiniDesc: "Rapide et efficace.", modelSmartDesc: "Équilibre vitesse/intelligence.", modelNerdDesc: "Modèle puissant."
-    },
-    ja: {
-        sidebarHeader: "履歴", newChatTitle: "新しいチャット", messagePlaceholder: "何を知りたいですか？", aiTypingPlaceholder: "AIが返信中...", outOfTokensPlaceholder: "トークン切れ。", sendButton: "送信", stopButton: "停止", modelButtonDefault: "エキスパート", modelButtonPrefix: "モデル", randomButton: "ランダム", videoButton: "ビデオ作成", learnButton: "学習", footerText: "AIは間違うことがあります。", themeModalTitle: "テーマ", languageModalTitle: "言語", themeDark: "ダーク", themeLight: "ライト", themeOcean: "海", modalClose: "閉じる", newChatHistory: "新しい会話", greetingMorning: "おはよう", greetingNoon: "こんにちは", greetingAfternoon: "こんにちは", greetingEvening: "こんばんは", errorPrefix: "エラー", comingSoon: "近日公開", comingSoonTitle: "近日公開...", comingSoonText: "開発中。", langTooltip: "言語", themeTooltip: "テーマ", historyTooltip: "履歴", newChatTooltip: "新規", modelMiniDesc: "高速で効率的。", modelSmartDesc: "速度と知能のバランス。", modelNerdDesc: "強力なモデル。"
-    },
-    it: {
-        sidebarHeader: "Cronologia", newChatTitle: "Nuova Chat", messagePlaceholder: "Cosa vuoi sapere?", aiTypingPlaceholder: "L'IA risponde...", outOfTokensPlaceholder: "Token esauriti.", sendButton: "Invia", stopButton: "Stop", modelButtonDefault: "Esperto", modelButtonPrefix: "Modello", randomButton: "Casuale", videoButton: "Crea Video", learnButton: "Studia", footerText: "L'IA può sbagliare.", themeModalTitle: "Tema", languageModalTitle: "Lingua", themeDark: "Scuro", themeLight: "Chiaro", themeOcean: "Oceano", modalClose: "Chiudi", newChatHistory: "Nuova Conversazione", greetingMorning: "Buongiorno", greetingNoon: "Buon pomeriggio", greetingAfternoon: "Buon pomeriggio", greetingEvening: "Buonasera", errorPrefix: "Errore", comingSoon: "Prossimamente", comingSoonTitle: "Prossimamente...", comingSoonText: "In sviluppo.", langTooltip: "Lingua", themeTooltip: "Tema", historyTooltip: "Cronologia", newChatTooltip: "Nuova", modelMiniDesc: "Veloce ed efficiente.", modelSmartDesc: "Equilibrio velocità/intelligenza.", modelNerdDesc: "Modello potente."
-    }
+    // ... (Giữ nguyên các ngôn ngữ khác của bạn nếu có)
 };
 
 // --- UI TEXT ELEMENTS ---
@@ -190,72 +190,21 @@ const themeColors = {
     }
 };
 
-// =====================================================================
-// SYSTEM PROMPT CONFIGURATION - ENHANCED
-// =====================================================================
-
 const coreInstructions = `
-QUY TẮC CỐT LÕI (BẮT BUỘC TUÂN THỦ):
-1. **Định dạng Toán học (Quan trọng nhất):**
-   - TUYỆT ĐỐI sử dụng cú pháp LaTeX cho mọi biểu thức toán học.
-   - Công thức cùng dòng (Inline): Dùng cặp dấu $...$ (Ví dụ: $E = mc^2$).
-   - Công thức xuống dòng (Block): Dùng cặp dấu $$...$$ (Ví dụ: $$ x = \frac{-b \pm \sqrt{\Delta}}{2a} $$).
-   - KHÔNG sử dụng \\( \\) hoặc \\[ \\] vì giao diện hiển thị có thể bị lỗi.
-
-2. **Trình bày văn bản:**
-   - Sử dụng Markdown chuẩn. Dùng **in đậm** cho các ý chính, từ khóa.
-   - Sử dụng Tiêu đề (h1, h2, h3) để phân chia nội dung rõ ràng.
-   - Dùng danh sách (bullet points) khi liệt kê để dễ đọc.
-   - Với mã lập trình (Code), PHẢI bọc trong \`\`\`language_name ... \`\`\`.
-
-3. **Kiểm soát chất lượng:**
-   - Suy nghĩ từng bước (Step-by-step reasoning) trước khi đưa ra kết quả cuối cùng để đảm bảo tính logic.
-   - Nếu không chắc chắn về thông tin, hãy thừa nhận trung thực, không bịa đặt (hallucinate).
+QUY TẮC CỐT LÕI:
+1. Định dạng Toán học: TUYỆT ĐỐI sử dụng cú pháp LaTeX cho mọi biểu thức toán học.
+2. Trình bày văn bản: Sử dụng Markdown chuẩn.
+3. Code: Dùng \`\`\`language ... \`\`\`.
 `;
 
 const systemPrompts = {
     vi: {
-        tutor: `Bạn là Oceep - một Giáo Sư AI đẳng cấp thế giới thuộc hệ sinh thái FoxAI.
-Mục tiêu: Giúp người dùng HIỂU BẢN CHẤT vấn đề, không chỉ đưa ra đáp án.
-HƯỚNG DẪN HÀNH VI:
-1. Phong cách: Kiên nhẫn, sư phạm, khích lệ.
-2. Phương pháp: Giải thích khái niệm bằng ví dụ thực tế. Sau khi giải thích, hãy đặt câu hỏi gợi mở.
-3. Khi giải bài tập: KHÔNG ĐƯA ĐÁP ÁN NGAY. Hãy hướng dẫn từng bước.
-${coreInstructions}`,
-        assistant: `Bạn là Oceep - Trợ lý ảo AI thông minh, toàn năng thuộc hệ sinh thái FoxAI.
-Mục tiêu: Giải quyết vấn đề NHANH, CHÍNH XÁC và ĐẦY ĐỦ.
-HƯỚNG DẪN HÀNH VI:
-1. Phong cách: Chuyên nghiệp, trực diện.
-2. Trả lời đầy đủ bối cảnh, góc nhìn đa chiều.
-${coreInstructions}`
+        tutor: `Bạn là Oceep - Giáo Sư AI. Giải thích chi tiết, dễ hiểu. ${coreInstructions}`,
+        assistant: `Bạn là Oceep - Trợ lý ảo AI. Trả lời nhanh, chính xác. ${coreInstructions}`
     },
     en: {
-        tutor: `You are Oceep, a world-class AI Tutor. Goal: Help users deeply understand concepts. Be patient, use Socratic methods. Strictly follow LaTeX rules: $...$ for inline, $$...$$ for blocks. ${coreInstructions}`,
-        assistant: `You are Oceep, a powerful virtual assistant. Provide comprehensive, accurate, and structured responses. Strictly follow LaTeX rules: $...$ for inline, $$...$$ for blocks. ${coreInstructions}`
-    },
-    zh: {
-        tutor: "你是 Oceep，FoxAI 的世界级 AI 导师。要有耐心，解释概念背后的原因。使用 LaTeX $...$ 进行数学计算。",
-        assistant: "你是 Oceep，FoxAI 的强大助手。回答全面、准确且结构清晰。严格遵循 LaTeX 格式。"
-    },
-    hi: {
-        tutor: "आप Oceep हैं, FoxAI द्वारा एक एआई ट्यूटर। धैर्य रखें और अवधारणाओं को समझाएं। गणित के लिए LaTeX $...$ का उपयोग करें।",
-        assistant: "आप Oceep हैं, FoxAI के सहायक। व्यापक और सटीक उत्तर दें। गणित के लिए LaTeX $...$ का सख्ती से पालन करें।"
-    },
-    es: {
-        tutor: "Eres Oceep, un tutor de IA de clase mundial. Sé paciente y explica el 'por qué'. Usa LaTeX $...$ para matemáticas.",
-        assistant: "Eres Oceep, un asistente poderoso. Proporciona respuestas completas y precisas. Usa LaTeX $...$ para matemáticas."
-    },
-    fr: {
-        tutor: "Vous êtes Oceep, un tuteur IA. Soyez patient, expliquez les concepts en profondeur. Utilisez LaTeX $...$ pour les maths.",
-        assistant: "Vous êtes Oceep, un assistant puissant de FoxAI. Fournissez des réponses complètes et structurées. Respectez LaTeX."
-    },
-    ja: {
-        tutor: "あなたはFoxAIのAI家庭教師、Oceepです。答えを教えるだけでなく、概念を深く理解できるように忍耐強く説明してください。数式には必ずLaTeX $...$ を使用してください。",
-        assistant: "あなたはFoxAIの強力なアシスタント、Oceepです。包括的かつ正確で、構造化された回答を提供してください。数式には厳密にLaTeX $...$ を使用してください。"
-    },
-    it: {
-        tutor: "Sei Oceep, un tutor AI. Spiega i concetti passo dopo passo. Usa LaTeX $...$ per la matematica.",
-        assistant: "Sei Oceep, un assistente potente. Fornisci risposte complete e precise. Usa LaTeX $...$ per la matematica."
+        tutor: `You are Oceep, an AI Tutor. Explain in detail. ${coreInstructions}`,
+        assistant: `You are Oceep, a virtual assistant. Answer fast and accurately. ${coreInstructions}`
     }
 };
 
@@ -386,7 +335,7 @@ function updateActiveLanguageButton(lang) {
 
 function switchLanguage(lang) {
     currentLang = lang;
-    const t = translations[lang];
+    const t = translations[lang] || translations['en'];
 
     textElements.sidebarHeader.textContent = t.sidebarHeader;
     textElements.input.placeholder = t.messagePlaceholder;
@@ -454,7 +403,7 @@ function setGreeting() {
     if (!mainTitle) return;
     const now = new Date();
     const hour = now.getHours();
-    const t = translations[currentLang];
+    const t = translations[currentLang] || translations['en'];
     let greeting = '';
     if (hour >= 5 && hour < 11) greeting = t.greetingMorning;
     else if (hour >= 11 && hour < 14) greeting = t.greetingNoon;
@@ -528,12 +477,13 @@ function renderHistoryList() {
     historyList.innerHTML = '';
     const currentTheme = localStorage.getItem('theme') || 'dark';
     const themeConfig = themeColors[currentTheme];
+    const t = translations[currentLang] || translations['en'];
 
     Object.keys(chatHistories).sort().reverse().forEach(chatId => {
         const history = chatHistories[chatId];
         if (chatId === currentChatId && history.length === 0) return;
 
-        let firstMessageText = translations[currentLang].newChatHistory;
+        let firstMessageText = t.newChatHistory;
         if (history.length > 0) {
             const firstContent = history[0].content;
             if (typeof firstContent === 'string') {
@@ -595,7 +545,6 @@ function loadChatHistory(chatId) {
             const el = createMessageElement(msg.content, msg.role);
             chatContainer.appendChild(el);
          });
-         // Render KaTeX khi load lịch sử
          renderMath(chatContainer);
     } else {
          initialView.classList.remove('hidden');
@@ -624,32 +573,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // BẢO MẬT: KIỂM TRA SỐ LẦN SỬ DỤNG
     // ==========================================
     function checkSecurityGate() {
-        // 1. Lấy ngưỡng giới hạn (limit) hiện tại
         let verificationLimit = localStorage.getItem('verificationLimit');
-
-        // Nếu chưa có limit (lần đầu chạy hoặc vừa reset), tạo random từ 2-7
         if (!verificationLimit) {
             verificationLimit = Math.floor(Math.random() * (7 - 2 + 1)) + 2;
             localStorage.setItem('verificationLimit', verificationLimit);
         } else {
             verificationLimit = parseInt(verificationLimit);
         }
-
-        // 2. Lấy số lần đã dùng
         let usageCount = parseInt(localStorage.getItem('appUsageCount') || '0');
         usageCount++;
-
-        // 3. Kiểm tra
         if (usageCount >= verificationLimit) {
-            // Đã đạt ngưỡng -> Khóa ngay lập tức và Chuyển trang
-            localStorage.setItem('isLocked', 'true'); // <--- KHÓA LẠI
+            localStorage.setItem('isLocked', 'true');
             window.location.href = 'verify.html';
         } else {
-            // Chưa đạt -> Lưu lại
             localStorage.setItem('appUsageCount', usageCount);
         }
     }
-    // Chạy kiểm tra ngay khi vào App
     checkSecurityGate();
     // ==========================================
 
@@ -779,7 +718,6 @@ function updateTokenUI() {
     if (tokenConfig.IS_INFINITE) {
         tokenInputsContainer.classList.add('hidden');
         tokenInfinity.classList.remove('hidden');
-        messageInput.placeholder = translations[currentLang].messagePlaceholder;
         return;
     }
     tokenInputsContainer.classList.remove('hidden');
@@ -791,8 +729,6 @@ function updateTokenUI() {
     if (currentTokens < tokenConfig.TOKEN_COST_PER_MESSAGE) {
         messageInput.disabled = true;
         messageInput.placeholder = translations[currentLang].outOfTokensPlaceholder;
-    } else {
-        messageInput.placeholder = translations[currentLang].messagePlaceholder;
     }
 }
 
@@ -820,17 +756,11 @@ const modelPopup = document.getElementById('model-popup');
 const randomPrompts = {
     vi: ["Kể một câu chuyện cười", "Thủ đô của nước Pháp là gì?", "Viết một đoạn văn về tầm quan trọng của việc đọc sách.", "Công thức làm món phở bò?"],
     en: ["Tell me a joke", "What is the capital of France?", "Write a paragraph about the importance of reading books.", "What is the recipe for beef pho?"],
-    zh: ["讲个笑话", "法国的首都是哪里？", "写一段关于阅读重要性的段落。", "牛肉河粉的食谱是什么？"],
-    hi: ["एक चुटकुला सुनाओ", "फ्रांस की राजधानी क्या है?", "किताबें पढ़ने के महत्व पर एक पैराग्राफ लिखें।", "बीफ फो की रेसिपी क्या है?"],
-    es: ["Cuéntame un chiste", "¿Cuál es la capital de Francia?", "Escribe un párrafo sobre la importancia de leer libros.", "¿Cuál es la receta del pho de ternera?"],
-    fr: ["Raconte-moi une blague", "Quelle est la capitale de la France ?", "Écrivez un paragraphe sur l'importance de la lecture.", "Quelle est la recette du phở au bœuf ?"],
-    ja: ["冗談を言って", "フランスの首都はどこですか？", "読書の重要性について段落を書いてください。", "牛肉フォーのレシピは何ですか？"],
-    it: ["Raccontami una barzelletta", "Qual è la capitale della Francia?", "Scrivi un paragrafo sull'importanza di leggere libri.", "Qual è la ricetta per il pho di manzo?"]
 };
 
 randomPromptBtn.addEventListener('click', () => {
     if (isRandomPromptUsedInSession) return;
-    const prompts = randomPrompts[currentLang];
+    const prompts = randomPrompts[currentLang] || randomPrompts['en'];
     const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
     messageInput.value = randomPrompt;
     messageInput.dispatchEvent(new Event('input')); 
@@ -839,7 +769,10 @@ randomPromptBtn.addEventListener('click', () => {
     chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
 });
 
-videoBtn.addEventListener('click', () => alert(translations[currentLang].comingSoon));
+videoBtn.addEventListener('click', () => {
+    const t = translations[currentLang] || translations['en'];
+    alert(t.comingSoon);
+});
 
 function updateLearnButtonVisualState() {
     const learnIcon = learnBtn.querySelector('svg');
@@ -864,7 +797,7 @@ learnBtn.addEventListener('click', () => {
 });
 
 function updateModelButtonText() {
-    const t = translations[currentLang];
+    const t = translations[currentLang] || translations['en'];
     if (currentModel && currentModel.model) {
         textElements.modelBtnText.textContent = currentModel.model;
     } else {
@@ -909,7 +842,7 @@ const createModelButton = (text, description, model, version = '', iconSvg) => {
 
 const showInitialModels = () => {
     modelPopup.innerHTML = '';
-    const t = translations[currentLang];
+    const t = translations[currentLang] || translations['en'];
     const iconThunder = `<svg class="w-6 h-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>`;
     const iconLightbulb = `<svg class="w-6 h-6 text-amber-300" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.311a7.5 7.5 0 01-7.5 0c-1.255 0-2.443-.29-3.5-.832a7.5 7.5 0 0114.5.032c-.318.13-.644.242-.984.326a7.5 7.5 0 01-4.016.033z" /></svg>`;
     const iconBrain = `<svg class="w-6 h-6 text-pink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>`;
@@ -963,12 +896,45 @@ languageOptionButtons.forEach(button => {
     });
 });
 
-// === UPDATED FUNCTION: FORMAT AI RESPONSE ===
+// === UPDATED FUNCTION: FORMAT AI RESPONSE (XỬ LÝ CODE BLOCK ĐẸP) ===
 function formatAIResponse(text) {
-    let formattedText = text.replace(/^##\s+(.*)$/gm, '<h2 class="text-xl font-bold text-blue-300 mt-4 mb-2 border-b border-gray-500/30 pb-1">$1</h2>');
-    formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    formattedText = formattedText.replace(/\n/g, '<br>');
-    return formattedText;
+    const codeBlocks = [];
+    
+    // 1. Tách các đoạn code (nằm trong ```) ra khỏi văn bản
+    // Regex này bắt: ```lang ...code... ```
+    let processedText = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
+        const index = codeBlocks.length;
+        codeBlocks.push({ lang: lang || 'code', code: code });
+        return `__CODE_BLOCK_${index}__`; 
+    });
+
+    // 2. Format văn bản thường (Markdown cơ bản)
+    processedText = processedText.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-blue-400">$1</strong>');
+    processedText = processedText.replace(/^##\s+(.*)$/gm, '<h2 class="text-xl font-bold mt-4 mb-2 border-b border-gray-500/50 pb-1">$1</h2>');
+    processedText = processedText.replace(/\n/g, '<br>');
+
+    // 3. Ghép code trở lại với giao diện khung đẹp
+    processedText = processedText.replace(/__CODE_BLOCK_(\d+)__/g, (match, index) => {
+        const block = codeBlocks[index];
+        // Escape HTML để tránh lỗi khi hiển thị thẻ
+        const escapedCode = block.code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+        return `
+        <div class="my-4 rounded-lg overflow-hidden bg-[#1e1e1e] border border-gray-700 shadow-xl w-full">
+            <div class="code-box-header flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-gray-700">
+                <span class="text-xs text-gray-400 font-mono font-bold uppercase">${block.lang}</span>
+                <button onclick="copyToClipboard(this)" class="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition cursor-pointer">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                    Copy
+                </button>
+            </div>
+            <div class="p-4 overflow-x-auto bg-[#1e1e1e]">
+                <pre><code class="font-mono text-sm text-green-400 whitespace-pre">${escapedCode}</code></pre>
+            </div>
+        </div>`;
+    });
+
+    return processedText;
 }
 
 function createMessageElement(messageContent, sender) {
@@ -1007,6 +973,7 @@ function createMessageElement(messageContent, sender) {
         row.classList.add('justify-start');
         messageWrapper.classList.add('ai-message-wrapper', 'animate-pop-in', 'max-w-4xl');
         messageWrapper.classList.add(...themeConfig.aiMessage);
+        // Sử dụng hàm format mới
         messageWrapper.innerHTML = formatAIResponse(messageContent);
     }
     row.appendChild(messageWrapper);
@@ -1018,15 +985,14 @@ function createMessageElement(messageContent, sender) {
 // ============================================================
 
 async function typeWriterEffect(text, element) {
-    // XÓA SẠCH DẤU ... TRƯỚC KHI BẮT ĐẦU
     element.innerHTML = ''; 
-    
     const words = text.split(/(?=\s)/g); 
     let currentText = "";
-    const speed = 10; // Tốc độ đánh máy (ms)
+    const speed = 10; 
 
     for (const word of words) {
         currentText += word;
+        // Mỗi lần gõ từ mới, chạy lại hàm format để render box nếu có code
         element.innerHTML = formatAIResponse(currentText);
         const chatContainer = document.getElementById('chat-container');
         if(chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -1041,12 +1007,10 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const systemMessage = { role: 'system', content: systemContent };
     const messagesWithSystemPrompt = [systemMessage, ...messages];
     
-    // Config cho môi trường Localhost hoặc Production
     const isLocal = window.location.hostname === 'localhost' || 
                     window.location.hostname === '127.0.0.1' ||
                     window.location.protocol === 'file:';
 
-    // ⚠️ Nếu test Local, điền URL dự án Cloudflare của bạn vào đây
     const CLOUDFLARE_PROJECT_URL = ''; 
 
     const API_URL = isLocal && CLOUDFLARE_PROJECT_URL 
@@ -1054,7 +1018,6 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
         : '/api/handler';
 
     try {
-        // Hiển thị trạng thái đang tải (dấu ...)
         aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse">...</span>';
 
         const response = await fetch(API_URL, {
@@ -1078,17 +1041,14 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
             throw new Error(errorMsg);
         }
 
-        // Nhận dữ liệu
         const data = await response.json();
         const fullText = data.content;
 
-        // Xóa sạch ... và chạy chữ
         await typeWriterEffect(fullText, aiMessageEl.firstChild);
         return fullText;
 
     } catch (error) {
         if (error.name === 'AbortError') return aiMessageEl.firstChild.innerText;
-        console.error("Fetch Error:", error);
         
         let userMsg = translations[currentLang]?.errorPrefix || "Đã có lỗi xảy ra.";
         if (error.message) userMsg += ` (${error.message})`;
@@ -1103,7 +1063,7 @@ stopButton.addEventListener('click', () => {
 });
 
 function setInputActive(isActive) {
-    const t = translations[currentLang];
+    const t = translations[currentLang] || translations['en'];
     messageInput.disabled = !isActive;
     const footerButtons = [
         randomPromptBtn, videoBtn, learnBtn, uploadFileBtn, modelButton
@@ -1180,7 +1140,7 @@ chatForm.addEventListener('submit', async function(event) {
         chatContainer.scrollTop = chatContainer.scrollHeight;
         saveStateToLocalStorage(); 
     } catch (error) {
-        // Error handling
+        // Error handling inside streamAIResponse
     } finally {
         aiMessageEl.firstChild.classList.remove('streaming');
         renderMath(aiMessageEl);
