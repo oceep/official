@@ -37,7 +37,6 @@ async function getCoordinates(query) {
 // --- Tool 3: Thời tiết (Open-Meteo) ---
 async function getWeather(query) {
     try {
-        // Cập nhật Regex để lọc bỏ từ khóa có dấu VÀ không dấu
         let loc = query.replace(/(thời tiết|nhiệt độ|dự báo|tại|ở|hôm nay|thế nào|\?|thoi tiet|nhiet do|du bao|tai|o|hom nay|the nao)/gi, '').trim();
         if (loc.length < 2) loc = "Hanoi";
         
@@ -72,7 +71,6 @@ async function getWeather(query) {
 }
 
 // --- Tool 4: Google Search (via SerpApi) ---
-// Yêu cầu: Cần thêm biến môi trường SERPAPI_KEY trong Cloudflare Dashboard
 async function searchGoogle(query, apiKey) {
     if (!apiKey) return null;
     
@@ -82,9 +80,9 @@ async function searchGoogle(query, apiKey) {
         url.searchParams.append('q', query);
         url.searchParams.append('api_key', apiKey);
         url.searchParams.append('google_domain', 'google.com.vn');
-        url.searchParams.append('gl', 'vn'); // Quốc gia: Việt Nam
-        url.searchParams.append('hl', 'vi'); // Ngôn ngữ: Tiếng Việt
-        url.searchParams.append('num', '5'); // Lấy top 5 kết quả
+        url.searchParams.append('gl', 'vn'); 
+        url.searchParams.append('hl', 'vi'); 
+        url.searchParams.append('num', '5'); 
 
         const res = await fetch(url.toString());
         if (!res.ok) return null;
@@ -93,26 +91,32 @@ async function searchGoogle(query, apiKey) {
         
         let resultText = `[GOOGLE SEARCH RESULTS]\nQuery: "${query}"\n`;
 
-        // 1. Lấy thông tin Knowledge Graph (nếu có - vd: thông tin nhân vật, công ty)
-        if (data.knowledge_graph) {
-            resultText += `> Info: ${data.knowledge_graph.title} - ${data.knowledge_graph.description || ''}\n`;
+        // 1. [QUAN TRỌNG] Lấy Local Map Pack (Các địa điểm trên bản đồ)
+        // Đây là phần giúp AI nhận biết nhiều quán trùng tên
+        if (data.local_results && data.local_results.places && data.local_results.places.length > 0) {
+            resultText += `\n[LOCAL PLACES FOUND] (User might be looking for one of these):\n`;
+            data.local_results.places.forEach((place, index) => {
+                resultText += `${index + 1}. ${place.title}\n`;
+                if (place.address) resultText += `   - Địa chỉ: ${place.address}\n`;
+                if (place.rating) resultText += `   - Đánh giá: ${place.rating}⭐ (${place.reviews} reviews)\n`;
+                if (place.price) resultText += `   - Mức giá: ${place.price}\n`;
+                if (place.type) resultText += `   - Loại hình: ${place.type}\n`;
+            });
+            resultText += `\n----------------\n`;
         }
 
-        // 2. Lấy thông tin Organic Results (kết quả tìm kiếm thường)
+        // 2. Lấy Knowledge Graph (Thông tin chính xác nếu Google xác định rõ)
+        if (data.knowledge_graph) {
+            resultText += `> Verified Info: ${data.knowledge_graph.title} - ${data.knowledge_graph.description || ''}\n`;
+        }
+
+        // 3. Lấy Organic Results (Kết quả web)
         if (data.organic_results && data.organic_results.length > 0) {
             data.organic_results.forEach((item, index) => {
                 if (item.snippet) {
-                    resultText += `${index + 1}. ${item.title}\n   ${item.snippet}\n   Source: ${item.source || 'Web'}\n`;
+                    resultText += `- Web Result: ${item.title}\n   Snippet: ${item.snippet}\n`;
                 }
             });
-        }
-        
-        // 3. Lấy thông tin Top Stories (nếu là tin tức)
-        if (data.top_stories && data.top_stories.length > 0) {
-             resultText += `\n[TOP NEWS]\n`;
-             data.top_stories.slice(0, 3).forEach(story => {
-                 resultText += `- ${story.title} (${story.date || 'Mới nhất'})\n`;
-             });
         }
 
         return resultText;
@@ -137,62 +141,47 @@ export async function onRequestPost(context) {
     try {
         const { modelName, messages } = await request.json();
 
-        // Config Key
         const apiConfig = {
-            'Mini': { key: env.MINI_API_KEY, model: 'arcee-ai/trinity-mini:free' },
+            'Mini': { key: env.MINI_API_KEY, model: 'openai/gpt-oss-20b:free' },
             'Smart': { key: env.SMART_API_KEY, model: 'google/gemini-flash-1.5-8b' },
             'Nerd': { key: env.NERD_API_KEY, model: 'x-ai/grok-4.1-fast:free' }
         };
         const config = apiConfig[modelName];
         if (!config || !config.key) return new Response(JSON.stringify({ error: "Missing API Key" }), { status: 400, headers: corsHeaders });
 
-        // --- PHÂN TÍCH Ý ĐỊNH & THU THẬP DỮ LIỆU ---
+        // --- PHÂN TÍCH Ý ĐỊNH ---
         const lastMsgObj = messages[messages.length - 1];
         const lastMsg = lastMsgObj.content.toLowerCase();
         let injectionData = "";
         let toolUsed = null;
 
-        // =========================================================
-        // LOGIC PHÂN LOẠI: NÊN SEARCH HAY KHÔNG?
-        // =========================================================
-
-        // 🟥 DANH SÁCH ĐỎ (KHÔNG SEARCH) - Cập nhật thêm từ khóa không dấu
+        // --- LOGIC PHÂN LOẠI SEARCH ---
         const skipSearchKeywords = /(viết code|sửa lỗi|lập trình|giải toán|phương trình|đạo hàm|tích phân|văn học|bài văn|thuyết minh|định nghĩa|khái niệm|lý thuyết|công thức|javascript|python|css|html|dịch sang|translate|viet code|sua loi|lap trinh|giai toan|phuong trinh|dao ham|tich phan|van hoc|bai van|thuyet minh|dinh nghia|khai niem|ly thuyet|cong thuc|dich sang)/;
         
-        // Chỉ bỏ qua search nếu KHÔNG có từ khóa thời gian thực (có dấu + không dấu)
         const hasRealtimeKeyword = /(giá|mới nhất|hôm nay|bây giờ|hiện tại|gia|moi nhat|hom nay|bay gio|hien tai)/.test(lastMsg);
         const shouldSkipSearch = skipSearchKeywords.test(lastMsg) && !hasRealtimeKeyword;
 
         if (!shouldSkipSearch) {
-            
-            // 🟩 DANH SÁCH XANH (CHẮC CHẮN SEARCH) - Cập nhật thêm từ khóa không dấu
             const mustSearchKeywords = [
-                // Địa điểm / Hàng quán
                 'quán', 'nhà hàng', 'ở đâu', 'địa chỉ', 'gần đây', 'đường nào', 'bản đồ',
-                'quan', 'nha hang', 'o dau', 'dia chi', 'gan day', 'duong nao', 'ban do', 'tiem',
-                // Thời gian / Thời tiết
+                'quan', 'nha hang', 'o dau', 'dia chi', 'gan day', 'duong nao', 'ban do',
                 'hôm nay', 'ngày mai', 'bây giờ', 'hiện tại', 'thời tiết', 'nhiệt độ', 'mưa không',
                 'hom nay', 'ngay mai', 'bay gio', 'hien tai', 'thoi tiet', 'nhiet do', 'mua khong',
-                // Tin tức / Sự kiện
                 'tin tức', 'sự kiện', 'mới nhất', 'vừa xảy ra', 'biến động', 'scandal',
                 'tin tuc', 'su kien', 'moi nhat', 'vua xay ra', 'bien dong',
-                // Giá cả / Tài chính
                 'giá', 'bao nhiêu tiền', 'chi phí', 'tỷ giá', 'giá vàng', 'coin', 'crypto', 'chứng khoán', 'cổ phiếu', 'mua', 'bán',
                 'gia', 'bao nhieu tien', 'chi phi', 'ty gia', 'gia vang', 'chung khoan', 'co phieu',
-                // Thông tin sống
                 'lịch thi đấu', 'kết quả', 'giờ mở cửa', 'kẹt xe', 'tắc đường', 'giao thông',
                 'lich thi dau', 'ket qua', 'gio mo cua', 'ket xe', 'tac duong', 'giao thong'
             ];
             
             const isMustSearch = mustSearchKeywords.some(kw => lastMsg.includes(kw));
 
-            // 1. Xử lý Thời gian (Có dấu + Không dấu)
             if (lastMsg.match(/(giờ|ngày|hôm nay|thứ mấy|bây giờ|gio|ngay|hom nay|thu may|bay gio)/)) {
                 injectionData += `SYSTEM TIME: ${getCurrentTime()}\n\n`;
                 if (!toolUsed) toolUsed = "Time";
             }
 
-            // 2. Xử lý Thời tiết (Có dấu + Không dấu)
             if (lastMsg.match(/(thời tiết|nhiệt độ|mưa|nắng|thoi tiet|nhiet do|mua|nang)/)) {
                 const data = await getWeather(lastMsg);
                 if (data) {
@@ -201,11 +190,8 @@ export async function onRequestPost(context) {
                 }
             }
 
-            // 3. Xử lý Google Search (SerpApi)
             if (isMustSearch) {
-                // Sử dụng key SerpApi từ biến môi trường
                 const serpKey = env.SERPAPI_KEY; 
-                
                 if (serpKey) {
                     const searchData = await searchGoogle(lastMsg, serpKey);
                     if (searchData) {
@@ -213,13 +199,12 @@ export async function onRequestPost(context) {
                         toolUsed = toolUsed || "Google Search";
                     }
                 } else {
-                    // Fallback nếu không có SerpApi Key: Báo lỗi nhẹ cho AI biết
-                    injectionData += "[SYSTEM NOTE: Search tool unavailable due to missing API Key]\n";
+                    injectionData += "[SYSTEM NOTE: Search tool unavailable]\n";
                 }
             }
         }
 
-        // --- CẤU TRÚC LẠI SYSTEM PROMPT ---
+        // --- CẤU TRÚC LẠI SYSTEM PROMPT (DẠY AI XỬ LÝ NHẦM LẪN) ---
         let finalMessages = [...messages];
 
         if (injectionData) {
@@ -232,22 +217,18 @@ ${injectionData}
 === END OF REAL-TIME DATA ===
 
 INSTRUCTIONS:
-1.  **Analyze:** Use the data above (Google Search Results, Weather, Time) to answer.
-2.  **No Hallucinations:** If the data contains prices, addresses, or news, quote them accurately.
-3.  **Citation:** Mention sources naturally (e.g., "Theo kết quả tìm kiếm...", "Dữ liệu thời tiết cho thấy...").
+1.  **Analyze Local Places:** Check the section "[LOCAL PLACES FOUND]". If there are multiple places with similar names (e.g., "Thủy Tạ Restaurant" vs "Thủy Tạ Cafe"), DO NOT assume one. Instead, list them and ask the user to clarify (e.g., "Có vài địa điểm tên là..., bạn muốn hỏi về chỗ nào?").
+2.  **Suggest Corrections:** If the user likely misspelled a name but the search results show a close match, suggest it politely (e.g., "Có thể bạn đang tìm... đúng không?").
+3.  **Accuracy:** Use exact addresses and prices from the data.
 4.  **Language:** Answer in Vietnamese.
-5.  **Scope:** If the user asks about "Now", "Today", "Current Price", you MUST rely on the data provided above.
 `;
             finalMessages.push({ role: "system", content: systemPrompt });
         } else {
-            // Nếu KHÔNG có injectionData (tức là rơi vào Red List hoặc không tìm thấy gì)
-            // Nhắc nhở AI dùng kiến thức nội tại
             if (shouldSkipSearch) {
-                finalMessages.push({ role: "system", content: "User is asking a task that requires internal knowledge (Coding, Math, Writing). Do NOT fabricate real-time info. Focus on logic and creativity." });
+                finalMessages.push({ role: "system", content: "User is asking a task that requires internal knowledge. Do NOT fabricate real-time info." });
             }
         }
 
-        // --- GỌI LLM ---
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
