@@ -142,7 +142,7 @@ export async function onRequestPost(context) {
         const { modelName, messages } = await request.json();
 
         const apiConfig = {
-            'Mini': { key: env.MINI_API_KEY, model: 'openai/gpt-oss-20b:free' },
+            'Mini': { key: env.MINI_API_KEY, model: 'arcee-ai/trinity-mini:free' },
             'Smart': { key: env.SMART_API_KEY, model: 'google/gemini-flash-1.5-8b' },
             'Nerd': { key: env.NERD_API_KEY, model: 'x-ai/grok-4.1-fast:free' }
         };
