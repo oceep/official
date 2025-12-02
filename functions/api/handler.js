@@ -70,61 +70,54 @@ async function getWeather(query) {
     } catch (e) { return null; }
 }
 
-// --- Tool 4: Wikipedia API (Rất ổn định cho định nghĩa/thông tin chung) ---
-async function searchWikipedia(query) {
+// --- Tool 4: Google Search (via SerpApi) ---
+// Yêu cầu: Cần thêm biến môi trường SERPAPI_KEY trong Cloudflare Dashboard
+async function searchGoogle(query, apiKey) {
+    if (!apiKey) return null;
+    
     try {
-        const url = `https://vi.wikipedia.org/w/api.php?action=query&list=search&prop=info&inprop=url&utf8=&format=json&origin=*&srlimit=3&srsearch=${encodeURIComponent(query)}`;
-        const res = await fetch(url);
+        const url = new URL('https://serpapi.com/search');
+        url.searchParams.append('engine', 'google');
+        url.searchParams.append('q', query);
+        url.searchParams.append('api_key', apiKey);
+        url.searchParams.append('google_domain', 'google.com.vn');
+        url.searchParams.append('gl', 'vn'); // Quốc gia: Việt Nam
+        url.searchParams.append('hl', 'vi'); // Ngôn ngữ: Tiếng Việt
+        url.searchParams.append('num', '5'); // Lấy top 5 kết quả
+
+        const res = await fetch(url.toString());
+        if (!res.ok) return null;
+
         const data = await res.json();
         
-        if (!data.query || !data.query.search || data.query.search.length === 0) return null;
+        let resultText = `[GOOGLE SEARCH RESULTS]\nQuery: "${query}"\n`;
 
-        const results = data.query.search.map(item => {
-            return `- Title: ${item.title}\n  Snippet: ${item.snippet.replace(/<[^>]*>/g, '')}`;
-        }).join('\n');
-
-        return `[WIKIPEDIA DATA]\n${results}`;
-    } catch (e) { return null; }
-}
-
-// --- Tool 5: DuckDuckGo HTML Search (Cải tiến Headers để tránh bị chặn) ---
-async function searchDuckDuckGo(query, type) {
-    try {
-        // Tối ưu từ khóa
-        let q = query;
-        if (type === 'price') q = `giá ${query} tại việt nam`;
-        else if (type === 'news') q = `tin tức ${query} mới nhất`;
-        else if (type === 'stock') q = `giá cổ phiếu ${query}`;
-
-        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`;
-        
-        // Giả lập User-Agent của trình duyệt thật để không bị chặn
-        const res = await fetch(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
-            }
-        });
-
-        if (!res.ok) return null;
-        const html = await res.text();
-
-        // Regex cải tiến để bắt dữ liệu chính xác hơn
-        const results = [];
-        const regex = /<a class="result__a" href="([^"]+)">([^<]+)<\/a>.*?<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
-        
-        let match;
-        let count = 0;
-        while ((match = regex.exec(html)) !== null && count < 5) {
-            results.push(`- Source: ${match[2].replace(/<[^>]*>/g, '')}\n  Summary: ${match[3].replace(/<[^>]*>/g, '')}\n  Link: ${match[1]}`);
-            count++;
+        // 1. Lấy thông tin Knowledge Graph (nếu có - vd: thông tin nhân vật, công ty)
+        if (data.knowledge_graph) {
+            resultText += `> Info: ${data.knowledge_graph.title} - ${data.knowledge_graph.description || ''}\n`;
         }
 
-        if (results.length === 0) return null; // Nếu bị chặn sẽ không có kết quả
+        // 2. Lấy thông tin Organic Results (kết quả tìm kiếm thường)
+        if (data.organic_results && data.organic_results.length > 0) {
+            data.organic_results.forEach((item, index) => {
+                if (item.snippet) {
+                    resultText += `${index + 1}. ${item.title}\n   ${item.snippet}\n   Source: ${item.source || 'Web'}\n`;
+                }
+            });
+        }
+        
+        // 3. Lấy thông tin Top Stories (nếu là tin tức)
+        if (data.top_stories && data.top_stories.length > 0) {
+             resultText += `\n[TOP NEWS]\n`;
+             data.top_stories.slice(0, 3).forEach(story => {
+                 resultText += `- ${story.title} (${story.date || 'Mới nhất'})\n`;
+             });
+        }
 
-        return `[WEB SEARCH RESULTS - DUCKDUCKGO]\nKeyword: "${q}"\n${results.join('\n\n')}`;
+        return resultText;
+
     } catch (e) {
+        console.error("SerpApi Error:", e);
         return null;
     }
 }
@@ -158,52 +151,75 @@ export async function onRequestPost(context) {
         let injectionData = "";
         let toolUsed = null;
 
-        // 1. Check Thời gian
-        if (lastMsg.match(/(giờ|ngày|hôm nay|thứ mấy)/)) {
-            injectionData += `SYSTEM TIME: ${getCurrentTime()}\n\n`;
-            toolUsed = "Time";
-        }
+        // =========================================================
+        // LOGIC PHÂN LOẠI: NÊN SEARCH HAY KHÔNG?
+        // =========================================================
 
-        // 2. Check Thời tiết
-        if (lastMsg.match(/(thời tiết|nhiệt độ|mưa|nắng)/)) {
-            const data = await getWeather(lastMsg);
-            if (data) {
-                injectionData += data + "\n\n";
-                toolUsed = "Weather";
-            }
-        }
-
-        // 3. Check Web Search (Giá cả, Tin tức, Cổ phiếu, Ai là, Ở đâu...)
-        // Đây là phần quan trọng để AI "đọc" web
-        const searchKeywords = /(giá|mua|bán|bao nhiêu|chi phí|vé|tin tức|sự kiện|mới nhất|cổ phiếu|chứng khoán|ai là|là gì|ở đâu|tại sao)/;
+        // 🟥 DANH SÁCH ĐỎ (KHÔNG SEARCH) - Ưu tiên kiểm tra trước để chặn search thừa
+        // Nếu dính các từ khóa này => Bỏ qua logic search bên dưới
+        const skipSearchKeywords = /(viết code|sửa lỗi|lập trình|giải toán|phương trình|đạo hàm|tích phân|văn học|bài văn|thuyết minh|định nghĩa|khái niệm|lý thuyết|công thức|javascript|python|css|html|dịch sang|translate)/;
         
-        if (searchKeywords.test(lastMsg) || lastMsg.length > 15) { // Nếu câu hỏi dài hoặc chứa từ khóa
-            let searchType = 'general';
-            if (lastMsg.match(/(giá|mua|bán|chi phí|vé|bao nhiêu)/)) searchType = 'price';
-            if (lastMsg.match(/(tin tức|sự kiện|mới nhất)/)) searchType = 'news';
-            if (lastMsg.match(/(cổ phiếu|chứng khoán)/)) searchType = 'stock';
+        // Chỉ bỏ qua search nếu KHÔNG có từ khóa thời gian thực đi kèm (ví dụ: "giá bitcoin code python" -> vẫn cần search giá)
+        const hasRealtimeKeyword = /(giá|mới nhất|hôm nay|bây giờ|hiện tại)/.test(lastMsg);
+        const shouldSkipSearch = skipSearchKeywords.test(lastMsg) && !hasRealtimeKeyword;
 
-            // Ưu tiên 1: DuckDuckGo (Thông tin mới nhất)
-            let searchData = await searchDuckDuckGo(lastMsg, searchType);
+        if (!shouldSkipSearch) {
             
-            // Ưu tiên 2: Wikipedia (Nếu DDG lỗi và câu hỏi là "là gì/ai là")
-            if (!searchData && lastMsg.match(/(là gì|ai là|địa lý|lịch sử)/)) {
-                searchData = await searchWikipedia(lastMsg);
+            // 🟩 DANH SÁCH XANH (CHẮC CHẮN SEARCH)
+            const mustSearchKeywords = [
+                // Địa điểm / Hàng quán
+                'quán', 'nhà hàng', 'ở đâu', 'địa chỉ', 'gần đây', 'đường nào', 'bản đồ',
+                // Thời gian / Thời tiết
+                'hôm nay', 'ngày mai', 'bây giờ', 'hiện tại', 'thời tiết', 'nhiệt độ', 'mưa không',
+                // Tin tức / Sự kiện
+                'tin tức', 'sự kiện', 'mới nhất', 'vừa xảy ra', 'biến động', 'scandal',
+                // Giá cả / Tài chính
+                'giá', 'bao nhiêu tiền', 'chi phí', 'tỷ giá', 'giá vàng', 'coin', 'crypto', 'chứng khoán', 'cổ phiếu', 'mua', 'bán',
+                // Thông tin sống
+                'lịch thi đấu', 'kết quả', 'giờ mở cửa', 'kẹt xe', 'tắc đường', 'giao thông'
+            ];
+            
+            const isMustSearch = mustSearchKeywords.some(kw => lastMsg.includes(kw));
+
+            // 1. Xử lý Thời gian (Luôn cần nếu hỏi giờ)
+            if (lastMsg.match(/(giờ|ngày|hôm nay|thứ mấy|bây giờ)/)) {
+                injectionData += `SYSTEM TIME: ${getCurrentTime()}\n\n`;
+                if (!toolUsed) toolUsed = "Time";
             }
 
-            if (searchData) {
-                injectionData += searchData + "\n\n";
-                toolUsed = toolUsed || "Web Search"; // Cập nhật nếu chưa có tool nào
+            // 2. Xử lý Thời tiết
+            if (lastMsg.match(/(thời tiết|nhiệt độ|mưa|nắng)/)) {
+                const data = await getWeather(lastMsg);
+                if (data) {
+                    injectionData += data + "\n\n";
+                    toolUsed = "Weather";
+                }
+            }
+
+            // 3. Xử lý Google Search (SerpApi)
+            if (isMustSearch) {
+                // Sử dụng key SerpApi từ biến môi trường
+                const serpKey = env.SERPAPI_KEY; 
+                
+                if (serpKey) {
+                    const searchData = await searchGoogle(lastMsg, serpKey);
+                    if (searchData) {
+                        injectionData += searchData + "\n\n";
+                        toolUsed = toolUsed || "Google Search";
+                    }
+                } else {
+                    // Fallback nếu không có SerpApi Key: Báo lỗi nhẹ cho AI biết
+                    injectionData += "[SYSTEM NOTE: Search tool unavailable due to missing API Key]\n";
+                }
             }
         }
 
         // --- CẤU TRÚC LẠI SYSTEM PROMPT ---
-        // Kỹ thuật "Grounding": Ép AI trả lời dựa trên dữ liệu vừa tìm được
         let finalMessages = [...messages];
 
         if (injectionData) {
             const systemPrompt = `
-You are Oceep, an AI assistant with REAL-TIME access to tools and the internet.
+You are Oceep, an AI assistant with REAL-TIME access to Google Search.
 Below is the raw data fetched just now for this specific user query:
 
 === START OF REAL-TIME DATA ===
@@ -211,14 +227,19 @@ ${injectionData}
 === END OF REAL-TIME DATA ===
 
 INSTRUCTIONS:
-1.  **Analyze the Data:** Read the "Summary" and "Snippet" sections in the data above carefully.
-2.  **Answer the User:** Use ONLY the information provided above to answer the user's question.
-3.  **Citation:** Mention the source if available (e.g., "Theo thông tin từ [Source]...").
-4.  **No Refusal:** Do NOT say "I cannot access the internet" or "I don't have real-time info". You HAVE the info above.
-5.  **Language:** Answer in Vietnamese.
+1.  **Analyze:** Use the data above (Google Search Results, Weather, Time) to answer.
+2.  **No Hallucinations:** If the data contains prices, addresses, or news, quote them accurately.
+3.  **Citation:** Mention sources naturally (e.g., "Theo kết quả tìm kiếm...", "Dữ liệu thời tiết cho thấy...").
+4.  **Language:** Answer in Vietnamese.
+5.  **Scope:** If the user asks about "Now", "Today", "Current Price", you MUST rely on the data provided above.
 `;
-            // Chèn System Prompt này vào cuối mảng messages để nó có trọng lượng cao nhất (ghi đè prompt cũ)
             finalMessages.push({ role: "system", content: systemPrompt });
+        } else {
+            // Nếu KHÔNG có injectionData (tức là rơi vào Red List hoặc không tìm thấy gì)
+            // Nhắc nhở AI dùng kiến thức nội tại
+            if (shouldSkipSearch) {
+                finalMessages.push({ role: "system", content: "User is asking a task that requires internal knowledge (Coding, Math, Writing). Do NOT fabricate real-time info. Focus on logic and creativity." });
+            }
         }
 
         // --- GỌI LLM ---
@@ -233,9 +254,9 @@ INSTRUCTIONS:
             body: JSON.stringify({
                 model: config.model,
                 messages: finalMessages,
-                stream: false, // Tắt stream để Cloudflare xử lý xong mới trả về (ổn định hơn cho tool)
+                stream: false, 
                 max_tokens: 2500,
-                temperature: 0.5 // Giảm nhiệt độ để AI bám sát dữ liệu thực tế hơn
+                temperature: 0.5 
             }),
         });
 
