@@ -847,6 +847,18 @@ const randomPrompts = {
     it: ["Raccontami una barzelletta", "Qual è la capitale della Francia?", "Scrivi un paragrafo sull'importanza di leggere libri.", "Qual è la ricetta per il pho di manzo?"]
 };
 
+// --- LOGIC KIỂM TRA XEM CÓ CẦN HIỆN TRẠNG THÁI SEARCH KHÔNG ---
+const searchKeywordsRegex = /(quán|nhà hàng|ở đâu|địa chỉ|gần đây|đường nào|bản đồ|quan|nha hang|o dau|dia chi|gan day|duong nao|ban do|hôm nay|ngày mai|bây giờ|hiện tại|thời tiết|nhiệt độ|mưa không|hom nay|ngay mai|bay gio|hien tai|thoi tiet|nhiet do|mua khong|tin tức|sự kiện|mới nhất|vừa xảy ra|biến động|scandal|tin tuc|su kien|moi nhat|vua xay ra|bien dong|giá|bao nhiêu tiền|chi phí|tỷ giá|giá vàng|coin|crypto|chứng khoán|cổ phiếu|mua|bán|gia|bao nhieu tien|chi phi|ty gia|gia vang|chung khoan|co phieu|lịch thi đấu|kết quả|giờ mở cửa|kẹt xe|tắc đường|giao thông|lich thi dau|ket qua|gio mo cua|ket xe|tac duong|giao thong)/i;
+
+function shouldShowSearchStatus(text) {
+    // Nếu là câu chào hỏi hoặc code/toán -> False (Không hiện searching)
+    const skipRegex = /(viết code|sửa lỗi|lập trình|giải toán|phương trình|đạo hàm|tích phân|văn học|bài văn|javascript|python|css|html|dịch sang|translate)/i;
+    if (skipRegex.test(text)) return false;
+    
+    // Check keyword
+    return searchKeywordsRegex.test(text);
+}
+
 randomPromptBtn.addEventListener('click', () => {
     if (isRandomPromptUsedInSession) return;
     const prompts = randomPrompts[currentLang];
@@ -1215,16 +1227,20 @@ chatForm.addEventListener('submit', async function(event) {
     updateRandomButtonVisibility(); 
     chatContainer.scrollTop = chatContainer.scrollHeight;
 
-    // --- LOGIC HIỂN THỊ TRẠNG THÁI ---
     const aiMessageEl = createMessageElement('', 'ai');
     aiMessageEl.firstChild.classList.add('streaming'); 
     
-    // Mặc định là đang trả lời
+    // Mặc định ban đầu
     aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse">AI đang trả lời...</span>';
-    
-    // Logic: Nếu quá 1.5s chưa xong -> Có thể đang đi Search -> Đổi text
+
+    // TIMER: Chỉ hiện "Đang tìm kiếm" nếu câu hỏi thực sự cần search
     const searchStatusTimer = setTimeout(() => {
-        aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse text-blue-400">Đang tìm kiếm thông tin...</span>';
+        if (shouldShowSearchStatus(message)) {
+             aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse text-blue-400">Đang tìm kiếm thông tin...</span>';
+        } else {
+             // Nếu không phải search, giữ nguyên hoặc đổi thành suy nghĩ
+             aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse">AI đang suy nghĩ...</span>';
+        }
     }, 1500);
 
     chatContainer.appendChild(aiMessageEl);
