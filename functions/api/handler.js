@@ -10,7 +10,7 @@ const corsHeaders = {
 // 1. CÁC HÀM GỌI API & SEARCH (TOOLS)
 // ==========================================
 
-// --- Tool 1: Thời gian (Native) ---
+// --- Tool 1: Thời gian ---
 function getCurrentTime() {
     const now = new Date();
     const date = now.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -18,14 +18,14 @@ function getCurrentTime() {
     return `${date} | ${time}`;
 }
 
-// --- Tool 2: Địa điểm (OpenStreetMap - Free) ---
+// --- Tool 2: Địa điểm (OpenStreetMap) ---
 async function getCoordinates(query) {
     try {
         const q = (query.includes('Vietnam') || query.length < 10) ? `${query} Vietnam` : query;
         const searchUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&accept-language=vi`;
         
         const res = await fetch(searchUrl, { 
-            headers: { 'User-Agent': 'FoxChatbot/1.0' } 
+            headers: { 'User-Agent': 'OceepAI/1.0' } 
         });
         const data = await res.json();
         
@@ -34,7 +34,7 @@ async function getCoordinates(query) {
     } catch (e) { return null; }
 }
 
-// --- Tool 3: Thời tiết (Open-Meteo - Free) ---
+// --- Tool 3: Thời tiết (Open-Meteo) ---
 async function getWeather(query) {
     try {
         let loc = query.replace(/(thời tiết|nhiệt độ|dự báo|tại|ở|hôm nay|thế nào|\?)/gi, '').trim();
@@ -60,68 +60,77 @@ async function getWeather(query) {
         };
         const status = wmo[cur.weather_code] || "Có mây";
 
-        return `[THỜI TIẾT THỰC TẾ]
-- Địa điểm: ${coords.name}
-- Thời gian đo: ${cur.time}
-- Trạng thái: ${status}
-- Nhiệt độ: ${cur.temperature_2m}°C (Cảm giác: ${cur.apparent_temperature}°C)
-- Độ ẩm: ${cur.relative_humidity_2m}%
-- Gió: ${cur.wind_speed_10m} km/h`;
+        return `[REAL-TIME WEATHER DATA]
+- Location: ${coords.name}
+- Time: ${cur.time}
+- Status: ${status}
+- Temp: ${cur.temperature_2m}°C (Feels like: ${cur.apparent_temperature}°C)
+- Humidity: ${cur.relative_humidity_2m}%
+- Wind: ${cur.wind_speed_10m} km/h`;
     } catch (e) { return null; }
 }
 
-// --- Tool 4: Tìm kiếm chung / Chứng khoán / Tin tức (DuckDuckGo HTML - Free & Unlimited) ---
-async function performSearch(query, type = 'general') {
+// --- Tool 4: Wikipedia API (Rất ổn định cho định nghĩa/thông tin chung) ---
+async function searchWikipedia(query) {
     try {
-        // Tối ưu từ khóa cho từng loại
-        let searchQuery = query;
-        if (type === 'stock') searchQuery = `${query} stock price`;
-        if (type === 'news') searchQuery = `${query} tin tức mới nhất`;
-        if (type === 'shopping') searchQuery = `giá ${query} việt nam`; // Thêm từ khóa shopping
-        if (type === 'general') searchQuery = query;
-
-        // Sử dụng DuckDuckGo HTML version (nhẹ, free, không cần API Key)
-        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(searchQuery)}`;
+        const url = `https://vi.wikipedia.org/w/api.php?action=query&list=search&prop=info&inprop=url&utf8=&format=json&origin=*&srlimit=3&srsearch=${encodeURIComponent(query)}`;
+        const res = await fetch(url);
+        const data = await res.json();
         
+        if (!data.query || !data.query.search || data.query.search.length === 0) return null;
+
+        const results = data.query.search.map(item => {
+            return `- Title: ${item.title}\n  Snippet: ${item.snippet.replace(/<[^>]*>/g, '')}`;
+        }).join('\n');
+
+        return `[WIKIPEDIA DATA]\n${results}`;
+    } catch (e) { return null; }
+}
+
+// --- Tool 5: DuckDuckGo HTML Search (Cải tiến Headers để tránh bị chặn) ---
+async function searchDuckDuckGo(query, type) {
+    try {
+        // Tối ưu từ khóa
+        let q = query;
+        if (type === 'price') q = `giá ${query} tại việt nam`;
+        else if (type === 'news') q = `tin tức ${query} mới nhất`;
+        else if (type === 'stock') q = `giá cổ phiếu ${query}`;
+
+        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`;
+        
+        // Giả lập User-Agent của trình duyệt thật để không bị chặn
         const res = await fetch(url, {
             headers: {
-                // Giả lập trình duyệt để không bị chặn
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
             }
         });
-        
+
         if (!res.ok) return null;
         const html = await res.text();
 
-        // Xử lý Regex đơn giản để lấy kết quả (Title và Snippet)
+        // Regex cải tiến để bắt dữ liệu chính xác hơn
         const results = [];
         const regex = /<a class="result__a" href="([^"]+)">([^<]+)<\/a>.*?<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
         
         let match;
         let count = 0;
-        // Lấy tối đa 4 kết quả đầu tiên
-        while ((match = regex.exec(html)) !== null && count < 4) {
-            let link = match[1];
-            let title = match[2].replace(/<[^>]*>/g, ''); // Xóa tag HTML thừa
-            let snippet = match[3].replace(/<[^>]*>/g, '');
-            results.push(`- Title: ${title}\n  Summary: ${snippet}\n  Link: ${link}`);
+        while ((match = regex.exec(html)) !== null && count < 5) {
+            results.push(`- Source: ${match[2].replace(/<[^>]*>/g, '')}\n  Summary: ${match[3].replace(/<[^>]*>/g, '')}\n  Link: ${match[1]}`);
             count++;
         }
 
-        if (results.length === 0) return null;
+        if (results.length === 0) return null; // Nếu bị chặn sẽ không có kết quả
 
-        return `[KẾT QUẢ TÌM KIẾM TỪ DUCKDUCKGO] (${type.toUpperCase()})
-Query: "${searchQuery}"
-${results.join('\n\n')}
-`;
+        return `[WEB SEARCH RESULTS - DUCKDUCKGO]\nKeyword: "${q}"\n${results.join('\n\n')}`;
     } catch (e) {
-        console.error("Search error:", e);
         return null;
     }
 }
 
 // ==========================================
-// 2. XỬ LÝ ROUTING & LOGIC THÔNG MINH
+// 2. XỬ LÝ REQUEST
 // ==========================================
 
 export async function onRequestOptions() {
@@ -132,7 +141,7 @@ export async function onRequestPost(context) {
     const { request, env } = context;
 
     try {
-        const { modelName, messages, max_tokens } = await request.json();
+        const { modelName, messages } = await request.json();
 
         // Config Key
         const apiConfig = {
@@ -143,20 +152,20 @@ export async function onRequestPost(context) {
         const config = apiConfig[modelName];
         if (!config || !config.key) return new Response(JSON.stringify({ error: "Missing API Key" }), { status: 400, headers: corsHeaders });
 
-        // --- PHÂN TÍCH Ý ĐỊNH NGƯỜI DÙNG ---
+        // --- PHÂN TÍCH Ý ĐỊNH & THU THẬP DỮ LIỆU ---
         const lastMsgObj = messages[messages.length - 1];
         const lastMsg = lastMsgObj.content.toLowerCase();
         let injectionData = "";
         let toolUsed = null;
 
-        // 1. NGÀY GIỜ (Ưu tiên cao nhất)
-        if (lastMsg.includes('giờ') || lastMsg.includes('ngày') || lastMsg.includes('thứ mấy') || lastMsg.includes('hôm nay')) {
-            injectionData += `THỜI GIAN HIỆN TẠI: ${getCurrentTime()}\n\n`;
+        // 1. Check Thời gian
+        if (lastMsg.match(/(giờ|ngày|hôm nay|thứ mấy)/)) {
+            injectionData += `SYSTEM TIME: ${getCurrentTime()}\n\n`;
             toolUsed = "Time";
         }
 
-        // 2. THỜI TIẾT
-        else if (lastMsg.includes('thời tiết') || lastMsg.includes('nhiệt độ') || lastMsg.includes('mưa') || lastMsg.includes('nắng')) {
+        // 2. Check Thời tiết
+        if (lastMsg.match(/(thời tiết|nhiệt độ|mưa|nắng)/)) {
             const data = await getWeather(lastMsg);
             if (data) {
                 injectionData += data + "\n\n";
@@ -164,69 +173,55 @@ export async function onRequestPost(context) {
             }
         }
 
-        // 3. CHỨNG KHOÁN (Stock)
-        else if (lastMsg.includes('giá cổ phiếu') || lastMsg.includes('chứng khoán') || lastMsg.includes('mã cổ phiếu') || lastMsg.includes('stock')) {
-            // Lấy từ khóa sau các từ trigger
-            let query = lastMsg.replace(/(giá cổ phiếu|chứng khoán|giá|của|mã)/g, '').trim();
-            const data = await performSearch(query, 'stock');
-            if (data) {
-                injectionData += data + "\n\n";
-                toolUsed = "Stock Search";
+        // 3. Check Web Search (Giá cả, Tin tức, Cổ phiếu, Ai là, Ở đâu...)
+        // Đây là phần quan trọng để AI "đọc" web
+        const searchKeywords = /(giá|mua|bán|bao nhiêu|chi phí|vé|tin tức|sự kiện|mới nhất|cổ phiếu|chứng khoán|ai là|là gì|ở đâu|tại sao)/;
+        
+        if (searchKeywords.test(lastMsg) || lastMsg.length > 15) { // Nếu câu hỏi dài hoặc chứa từ khóa
+            let searchType = 'general';
+            if (lastMsg.match(/(giá|mua|bán|chi phí|vé|bao nhiêu)/)) searchType = 'price';
+            if (lastMsg.match(/(tin tức|sự kiện|mới nhất)/)) searchType = 'news';
+            if (lastMsg.match(/(cổ phiếu|chứng khoán)/)) searchType = 'stock';
+
+            // Ưu tiên 1: DuckDuckGo (Thông tin mới nhất)
+            let searchData = await searchDuckDuckGo(lastMsg, searchType);
+            
+            // Ưu tiên 2: Wikipedia (Nếu DDG lỗi và câu hỏi là "là gì/ai là")
+            if (!searchData && lastMsg.match(/(là gì|ai là|địa lý|lịch sử)/)) {
+                searchData = await searchWikipedia(lastMsg);
+            }
+
+            if (searchData) {
+                injectionData += searchData + "\n\n";
+                toolUsed = toolUsed || "Web Search"; // Cập nhật nếu chưa có tool nào
             }
         }
 
-        // 4. MUA SẮM / GIÁ CẢ / VÉ (Shopping - MỚI THÊM)
-        else if (lastMsg.includes('giá') || lastMsg.includes('chi phí') || lastMsg.includes('vé') || lastMsg.includes('mua') || lastMsg.includes('bán') || lastMsg.includes('bao nhiêu')) {
-             let query = lastMsg.replace(/(giá|chi phí|vé|bao nhiêu|tiền)/g, '').trim();
-             const data = await performSearch(query, 'shopping');
-             if (data) {
-                 injectionData += data + "\n\n";
-                 toolUsed = "Shopping Search";
-             }
-        }
-
-        // 5. TIN TỨC (News)
-        else if (lastMsg.includes('tin tức') || lastMsg.includes('báo chí') || lastMsg.includes('sự kiện') || lastMsg.includes('mới nhất')) {
-            const data = await performSearch(lastMsg, 'news');
-            if (data) {
-                injectionData += data + "\n\n";
-                toolUsed = "News Search";
-            }
-        }
-
-        // 6. TÌM KIẾM TỔNG QUÁT (Fallback)
-        else if (!toolUsed && (lastMsg.includes('ai là') || lastMsg.includes('là gì') || lastMsg.includes('ở đâu') || lastMsg.includes('top') || lastMsg.length > 10)) {
-             const commonGreetings = ['xin chào', 'hello', 'hi', 'bạn là ai', 'giúp gì', 'cảm ơn'];
-             if (!commonGreetings.some(g => lastMsg.includes(g))) {
-                 const data = await performSearch(lastMsg, 'general');
-                 if (data) {
-                     injectionData += data + "\n\n";
-                     toolUsed = "General Search";
-                 }
-             }
-        }
-
-        // --- TẠO SYSTEM PROMPT MỚI ---
+        // --- CẤU TRÚC LẠI SYSTEM PROMPT ---
+        // Kỹ thuật "Grounding": Ép AI trả lời dựa trên dữ liệu vừa tìm được
         let finalMessages = [...messages];
 
         if (injectionData) {
-            // System Override: Ép buộc AI nhận dữ liệu và CẤM từ chối
-            const overridePrompt = `
-[REAL-TIME DATA FETCHED]
-========================
+            const systemPrompt = `
+You are Oceep, an AI assistant with REAL-TIME access to tools and the internet.
+Below is the raw data fetched just now for this specific user query:
+
+=== START OF REAL-TIME DATA ===
 ${injectionData}
-========================
-CRITICAL INSTRUCTIONS:
-1. The user's query relates to the real-time data provided above.
-2. You MUST use this data to answer.
-3. DO NOT state "I am an AI and cannot access real-time data" because you HAVE the data right above.
-4. If prices are mentioned in the search results, quote them directly.
-5. Answer directly in Vietnamese.
+=== END OF REAL-TIME DATA ===
+
+INSTRUCTIONS:
+1.  **Analyze the Data:** Read the "Summary" and "Snippet" sections in the data above carefully.
+2.  **Answer the User:** Use ONLY the information provided above to answer the user's question.
+3.  **Citation:** Mention the source if available (e.g., "Theo thông tin từ [Source]...").
+4.  **No Refusal:** Do NOT say "I cannot access the internet" or "I don't have real-time info". You HAVE the info above.
+5.  **Language:** Answer in Vietnamese.
 `;
-            finalMessages.push({ role: "system", content: overridePrompt });
+            // Chèn System Prompt này vào cuối mảng messages để nó có trọng lượng cao nhất (ghi đè prompt cũ)
+            finalMessages.push({ role: "system", content: systemPrompt });
         }
 
-        // --- GỌI OPENROUTER ---
+        // --- GỌI LLM ---
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -238,9 +233,9 @@ CRITICAL INSTRUCTIONS:
             body: JSON.stringify({
                 model: config.model,
                 messages: finalMessages,
-                stream: false,
-                max_tokens: 2000,
-                temperature: 0.6
+                stream: false, // Tắt stream để Cloudflare xử lý xong mới trả về (ổn định hơn cho tool)
+                max_tokens: 2500,
+                temperature: 0.5 // Giảm nhiệt độ để AI bám sát dữ liệu thực tế hơn
             }),
         });
 
@@ -248,16 +243,18 @@ CRITICAL INSTRUCTIONS:
             const txt = await res.text();
             return new Response(JSON.stringify({ error: txt }), { status: res.status, headers: corsHeaders });
         }
-        const data = await res.json();
         
+        const data = await res.json();
+        const aiContent = data.choices?.[0]?.message?.content || "";
+
         return new Response(JSON.stringify({ 
-            content: data.choices?.[0]?.message?.content || "",
+            content: aiContent,
             toolUsed: toolUsed 
         }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
 
     } catch (e) {
-        return new Response(JSON.stringify({ error: `Server Error: ${e.message}` }), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: `System Error: ${e.message}` }), { status: 500, headers: corsHeaders });
     }
 }
