@@ -77,6 +77,7 @@ async function performSearch(query, type = 'general') {
         let searchQuery = query;
         if (type === 'stock') searchQuery = `${query} stock price`;
         if (type === 'news') searchQuery = `${query} tin tức mới nhất`;
+        if (type === 'shopping') searchQuery = `giá ${query} việt nam`; // Thêm từ khóa shopping
         if (type === 'general') searchQuery = query;
 
         // Sử dụng DuckDuckGo HTML version (nhẹ, free, không cần API Key)
@@ -93,7 +94,6 @@ async function performSearch(query, type = 'general') {
         const html = await res.text();
 
         // Xử lý Regex đơn giản để lấy kết quả (Title và Snippet)
-        // Lưu ý: DuckDuckGo class thường là 'result__a' (title) và 'result__snippet' (desc)
         const results = [];
         const regex = /<a class="result__a" href="([^"]+)">([^<]+)<\/a>.*?<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
         
@@ -156,7 +156,7 @@ export async function onRequestPost(context) {
         }
 
         // 2. THỜI TIẾT
-        if (lastMsg.includes('thời tiết') || lastMsg.includes('nhiệt độ') || lastMsg.includes('mưa') || lastMsg.includes('nắng')) {
+        else if (lastMsg.includes('thời tiết') || lastMsg.includes('nhiệt độ') || lastMsg.includes('mưa') || lastMsg.includes('nắng')) {
             const data = await getWeather(lastMsg);
             if (data) {
                 injectionData += data + "\n\n";
@@ -165,7 +165,7 @@ export async function onRequestPost(context) {
         }
 
         // 3. CHỨNG KHOÁN (Stock)
-        if (lastMsg.includes('giá cổ phiếu') || lastMsg.includes('chứng khoán') || lastMsg.includes('mã cổ phiếu') || lastMsg.includes('stock')) {
+        else if (lastMsg.includes('giá cổ phiếu') || lastMsg.includes('chứng khoán') || lastMsg.includes('mã cổ phiếu') || lastMsg.includes('stock')) {
             // Lấy từ khóa sau các từ trigger
             let query = lastMsg.replace(/(giá cổ phiếu|chứng khoán|giá|của|mã)/g, '').trim();
             const data = await performSearch(query, 'stock');
@@ -175,7 +175,17 @@ export async function onRequestPost(context) {
             }
         }
 
-        // 4. TIN TỨC (News)
+        // 4. MUA SẮM / GIÁ CẢ / VÉ (Shopping - MỚI THÊM)
+        else if (lastMsg.includes('giá') || lastMsg.includes('chi phí') || lastMsg.includes('vé') || lastMsg.includes('mua') || lastMsg.includes('bán') || lastMsg.includes('bao nhiêu')) {
+             let query = lastMsg.replace(/(giá|chi phí|vé|bao nhiêu|tiền)/g, '').trim();
+             const data = await performSearch(query, 'shopping');
+             if (data) {
+                 injectionData += data + "\n\n";
+                 toolUsed = "Shopping Search";
+             }
+        }
+
+        // 5. TIN TỨC (News)
         else if (lastMsg.includes('tin tức') || lastMsg.includes('báo chí') || lastMsg.includes('sự kiện') || lastMsg.includes('mới nhất')) {
             const data = await performSearch(lastMsg, 'news');
             if (data) {
@@ -184,11 +194,9 @@ export async function onRequestPost(context) {
             }
         }
 
-        // 5. TÌM KIẾM TỔNG QUÁT (Fallback cho câu hỏi khó/cần fact)
-        // Nếu chưa dùng tool nào và câu hỏi có vẻ cần dữ liệu thực tế (chứa "ai là", "tại sao", "kết quả", "như thế nào")
-        else if (!toolUsed && (lastMsg.includes('ai là') || lastMsg.includes('là gì') || lastMsg.includes('ở đâu') || lastMsg.includes('top') || lastMsg.length > 15)) {
-             // Chỉ search nếu không phải là chào hỏi xã giao
-             const commonGreetings = ['xin chào', 'hello', 'hi', 'bạn là ai', 'giúp gì'];
+        // 6. TÌM KIẾM TỔNG QUÁT (Fallback)
+        else if (!toolUsed && (lastMsg.includes('ai là') || lastMsg.includes('là gì') || lastMsg.includes('ở đâu') || lastMsg.includes('top') || lastMsg.length > 10)) {
+             const commonGreetings = ['xin chào', 'hello', 'hi', 'bạn là ai', 'giúp gì', 'cảm ơn'];
              if (!commonGreetings.some(g => lastMsg.includes(g))) {
                  const data = await performSearch(lastMsg, 'general');
                  if (data) {
@@ -202,18 +210,18 @@ export async function onRequestPost(context) {
         let finalMessages = [...messages];
 
         if (injectionData) {
-            // System Override: Ép buộc AI nhận dữ liệu và trích dẫn nguồn
+            // System Override: Ép buộc AI nhận dữ liệu và CẤM từ chối
             const overridePrompt = `
-[SYSTEM DATA & TOOLS RESULT - REALTIME]
+[REAL-TIME DATA FETCHED]
 ========================
 ${injectionData}
 ========================
-INSTRUCTION:
-The user is asking about the above information.
-1. You MUST use the provided data to answer.
-2. If using Search Results, synthesize the information concisely.
-3. Cite the source (domain name) if available (e.g., "Theo [Source Name]...").
-4. Answer directly in Vietnamese.
+CRITICAL INSTRUCTIONS:
+1. The user's query relates to the real-time data provided above.
+2. You MUST use this data to answer.
+3. DO NOT state "I am an AI and cannot access real-time data" because you HAVE the data right above.
+4. If prices are mentioned in the search results, quote them directly.
+5. Answer directly in Vietnamese.
 `;
             finalMessages.push({ role: "system", content: overridePrompt });
         }
@@ -242,10 +250,9 @@ The user is asking about the above information.
         }
         const data = await res.json();
         
-        // Trả về content kèm metadata tool đã dùng (để debug nếu cần)
         return new Response(JSON.stringify({ 
             content: data.choices?.[0]?.message?.content || "",
-            toolUsed: toolUsed // Frontend có thể dùng cái này để hiển thị icon tool
+            toolUsed: toolUsed 
         }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
