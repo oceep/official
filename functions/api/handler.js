@@ -169,7 +169,7 @@ export async function onRequestPost(context) {
             const mustSearchKeywords = [
                 // Địa điểm / Hàng quán
                 'quán', 'nhà hàng', 'ở đâu', 'địa chỉ', 'gần đây', 'đường nào', 'bản đồ',
-                'quan', 'nha hang', 'o dau', 'dia chi', 'gan day', 'duong nao', 'ban do',
+                'quan', 'nha hang', 'o dau', 'dia chi', 'gan day', 'duong nao', 'ban do', 'tiem',
                 // Thời gian / Thời tiết
                 'hôm nay', 'ngày mai', 'bây giờ', 'hiện tại', 'thời tiết', 'nhiệt độ', 'mưa không',
                 'hom nay', 'ngay mai', 'bay gio', 'hien tai', 'thoi tiet', 'nhiet do', 'mua khong',
