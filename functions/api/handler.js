@@ -37,7 +37,8 @@ async function getCoordinates(query) {
 // --- Tool 3: Thời tiết (Open-Meteo) ---
 async function getWeather(query) {
     try {
-        let loc = query.replace(/(thời tiết|nhiệt độ|dự báo|tại|ở|hôm nay|thế nào|\?)/gi, '').trim();
+        // Cập nhật Regex để lọc bỏ từ khóa có dấu VÀ không dấu
+        let loc = query.replace(/(thời tiết|nhiệt độ|dự báo|tại|ở|hôm nay|thế nào|\?|thoi tiet|nhiet do|du bao|tai|o|hom nay|the nao)/gi, '').trim();
         if (loc.length < 2) loc = "Hanoi";
         
         let coords = await getCoordinates(loc);
@@ -155,40 +156,44 @@ export async function onRequestPost(context) {
         // LOGIC PHÂN LOẠI: NÊN SEARCH HAY KHÔNG?
         // =========================================================
 
-        // 🟥 DANH SÁCH ĐỎ (KHÔNG SEARCH) - Ưu tiên kiểm tra trước để chặn search thừa
-        // Nếu dính các từ khóa này => Bỏ qua logic search bên dưới
-        const skipSearchKeywords = /(viết code|sửa lỗi|lập trình|giải toán|phương trình|đạo hàm|tích phân|văn học|bài văn|thuyết minh|định nghĩa|khái niệm|lý thuyết|công thức|javascript|python|css|html|dịch sang|translate)/;
+        // 🟥 DANH SÁCH ĐỎ (KHÔNG SEARCH) - Cập nhật thêm từ khóa không dấu
+        const skipSearchKeywords = /(viết code|sửa lỗi|lập trình|giải toán|phương trình|đạo hàm|tích phân|văn học|bài văn|thuyết minh|định nghĩa|khái niệm|lý thuyết|công thức|javascript|python|css|html|dịch sang|translate|viet code|sua loi|lap trinh|giai toan|phuong trinh|dao ham|tich phan|van hoc|bai van|thuyet minh|dinh nghia|khai niem|ly thuyet|cong thuc|dich sang)/;
         
-        // Chỉ bỏ qua search nếu KHÔNG có từ khóa thời gian thực đi kèm (ví dụ: "giá bitcoin code python" -> vẫn cần search giá)
-        const hasRealtimeKeyword = /(giá|mới nhất|hôm nay|bây giờ|hiện tại)/.test(lastMsg);
+        // Chỉ bỏ qua search nếu KHÔNG có từ khóa thời gian thực (có dấu + không dấu)
+        const hasRealtimeKeyword = /(giá|mới nhất|hôm nay|bây giờ|hiện tại|gia|moi nhat|hom nay|bay gio|hien tai)/.test(lastMsg);
         const shouldSkipSearch = skipSearchKeywords.test(lastMsg) && !hasRealtimeKeyword;
 
         if (!shouldSkipSearch) {
             
-            // 🟩 DANH SÁCH XANH (CHẮC CHẮN SEARCH)
+            // 🟩 DANH SÁCH XANH (CHẮC CHẮN SEARCH) - Cập nhật thêm từ khóa không dấu
             const mustSearchKeywords = [
                 // Địa điểm / Hàng quán
                 'quán', 'nhà hàng', 'ở đâu', 'địa chỉ', 'gần đây', 'đường nào', 'bản đồ',
+                'quan', 'nha hang', 'o dau', 'dia chi', 'gan day', 'duong nao', 'ban do',
                 // Thời gian / Thời tiết
                 'hôm nay', 'ngày mai', 'bây giờ', 'hiện tại', 'thời tiết', 'nhiệt độ', 'mưa không',
+                'hom nay', 'ngay mai', 'bay gio', 'hien tai', 'thoi tiet', 'nhiet do', 'mua khong',
                 // Tin tức / Sự kiện
                 'tin tức', 'sự kiện', 'mới nhất', 'vừa xảy ra', 'biến động', 'scandal',
+                'tin tuc', 'su kien', 'moi nhat', 'vua xay ra', 'bien dong',
                 // Giá cả / Tài chính
                 'giá', 'bao nhiêu tiền', 'chi phí', 'tỷ giá', 'giá vàng', 'coin', 'crypto', 'chứng khoán', 'cổ phiếu', 'mua', 'bán',
+                'gia', 'bao nhieu tien', 'chi phi', 'ty gia', 'gia vang', 'chung khoan', 'co phieu',
                 // Thông tin sống
-                'lịch thi đấu', 'kết quả', 'giờ mở cửa', 'kẹt xe', 'tắc đường', 'giao thông'
+                'lịch thi đấu', 'kết quả', 'giờ mở cửa', 'kẹt xe', 'tắc đường', 'giao thông',
+                'lich thi dau', 'ket qua', 'gio mo cua', 'ket xe', 'tac duong', 'giao thong'
             ];
             
             const isMustSearch = mustSearchKeywords.some(kw => lastMsg.includes(kw));
 
-            // 1. Xử lý Thời gian (Luôn cần nếu hỏi giờ)
-            if (lastMsg.match(/(giờ|ngày|hôm nay|thứ mấy|bây giờ)/)) {
+            // 1. Xử lý Thời gian (Có dấu + Không dấu)
+            if (lastMsg.match(/(giờ|ngày|hôm nay|thứ mấy|bây giờ|gio|ngay|hom nay|thu may|bay gio)/)) {
                 injectionData += `SYSTEM TIME: ${getCurrentTime()}\n\n`;
                 if (!toolUsed) toolUsed = "Time";
             }
 
-            // 2. Xử lý Thời tiết
-            if (lastMsg.match(/(thời tiết|nhiệt độ|mưa|nắng)/)) {
+            // 2. Xử lý Thời tiết (Có dấu + Không dấu)
+            if (lastMsg.match(/(thời tiết|nhiệt độ|mưa|nắng|thoi tiet|nhiet do|mua|nang)/)) {
                 const data = await getWeather(lastMsg);
                 if (data) {
                     injectionData += data + "\n\n";
