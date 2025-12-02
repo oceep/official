@@ -11,7 +11,7 @@ if (localStorage.getItem('isLocked') === 'true') {
 //=====================================================================//
 
 //=====================================================================//
-// NEW: HÀM COPY CODE (Để nút Copy trong Code Box hoạt động)           //
+// NEW: HÀM COPY CODE (Để nút Copy trong Code Box hoạt động)            //
 //=====================================================================//
 window.copyToClipboard = function(btn) {
     // Tìm phần tử code bên trong pre > code
@@ -916,7 +916,6 @@ const createModelButton = (text, description, model, version = '', iconSvg) => {
     descSpan.textContent = description;
     textContainer.appendChild(descSpan);
     leftContainer.appendChild(textContainer);
-    button.appendChild(leftContainer);
     const checkmarkContainer = document.createElement('div');
     checkmarkContainer.innerHTML = `<svg class="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>`;
     if (!(currentModel && currentModel.model === model && (!version || currentModel.version === version))) {
@@ -1113,9 +1112,6 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
         : '/api/handler';
 
     try {
-        // Hiển thị trạng thái đang tải (dấu ...)
-        aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse">...</span>';
-
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1219,8 +1215,18 @@ chatForm.addEventListener('submit', async function(event) {
     updateRandomButtonVisibility(); 
     chatContainer.scrollTop = chatContainer.scrollHeight;
 
+    // --- LOGIC HIỂN THỊ TRẠNG THÁI ---
     const aiMessageEl = createMessageElement('', 'ai');
     aiMessageEl.firstChild.classList.add('streaming'); 
+    
+    // Mặc định là đang trả lời
+    aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse">AI đang trả lời...</span>';
+    
+    // Logic: Nếu quá 1.5s chưa xong -> Có thể đang đi Search -> Đổi text
+    const searchStatusTimer = setTimeout(() => {
+        aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse text-blue-400">Đang tìm kiếm thông tin...</span>';
+    }, 1500);
+
     chatContainer.appendChild(aiMessageEl);
     chatContainer.scrollTop = chatContainer.scrollHeight;
     
@@ -1235,13 +1241,17 @@ chatForm.addEventListener('submit', async function(event) {
         const modelToUse = (currentModel && currentModel.model) ? currentModel.model : 'Mini';
         const fullAiResponse = await streamAIResponse(modelToUse, conversationHistory, aiMessageEl, abortController.signal);
         
+        clearTimeout(searchStatusTimer); // Xóa timer nếu xong sớm
         conversationHistory.push({ role: 'assistant', content: fullAiResponse });
         chatContainer.scrollTop = chatContainer.scrollHeight;
         saveStateToLocalStorage(); 
     } catch (error) {
+        clearTimeout(searchStatusTimer);
         // Error handling inside streamAIResponse
     } finally {
+        clearTimeout(searchStatusTimer);
         aiMessageEl.firstChild.classList.remove('streaming');
+        // Render lại toán học nếu có
         renderMath(aiMessageEl);
 
         stopButton.classList.add('hidden');
