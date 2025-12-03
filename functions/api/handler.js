@@ -157,7 +157,7 @@ export async function onRequestPost(context) {
             'hôm nay', 'ngày mai', 'bây giờ', 'hiện tại', 'thời tiết', 'nhiệt độ', 'mưa', 'nắng',
             'hom nay', 'ngay mai', 'bay gio', 'hien tai', 'thoi tiet', 'nhiet do', 'mua', 'nang',
             'tin tức', 'sự kiện', 'mới nhất', 'vừa xảy ra', 'biến động', 'scandal', 'drama',
-            'tin tuc', 'su kien', 'moi nhat', 'vua xay ra', 'bien dong',
+            'tin tuc', 'su kien', 'moi nhat', 'gan nhat', 'vua xay ra', 'bien dong',
             'giá', 'bao nhiêu', 'chi phí', 'tỷ giá', 'vàng', 'coin', 'crypto', 'chứng khoán', 'cổ phiếu', 'mua', 'bán', 'vé',
             'gia', 'bao nhieu', 'chi phi', 'ty gia', 'vang', 'chung khoan', 'co phieu', 've',
             'lịch', 'kết quả', 'giờ mở cửa', 'kẹt xe', 'tắc đường', 'giao thông', 'là ai', 'là gì', 'tiểu sử', 'review',
