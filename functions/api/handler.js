@@ -49,78 +49,88 @@ async function getWeather(query) {
     } catch (e) { return null; }
 }
 
-// --- Tool 3: Google Search (via SerpApi) ---
-async function searchGoogle(query, apiKey) {
+// --- Tool 3: Firecrawl Search (New) ---
+async function searchFirecrawl(query, apiKey) {
     if (!apiKey) return null;
     
     try {
-        const url = new URL('https://serpapi.com/search');
-        url.searchParams.append('engine', 'google');
-        url.searchParams.append('q', query);
-        url.searchParams.append('api_key', apiKey);
-        url.searchParams.append('google_domain', 'google.com.vn');
-        url.searchParams.append('gl', 'vn'); 
-        url.searchParams.append('hl', 'vi'); 
-        url.searchParams.append('num', '6'); 
+        // Sử dụng endpoint search của Firecrawl
+        const res = await fetch('https://api.firecrawl.dev/v0/search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                query: query,
+                limit: 5,
+                lang: 'vi',
+                scrapeOptions: { formats: ['markdown'] }
+            })
+        });
 
-        const res = await fetch(url.toString());
         if (!res.ok) return null;
-
         const data = await res.json();
         
-        let resultText = `[GOOGLE SEARCH RESULTS]\nQuery: "${query}"\n`;
+        if (!data.success || !data.data || data.data.length === 0) return null;
 
-        if (data.ads && data.ads.length > 0) {
-            resultText += `\n[ADS/SPONSORED] (Check for deals/prices):\n`;
-            data.ads.forEach((ad, index) => {
-                if (index < 3) {
-                    resultText += `* [Ad] ${ad.title}: ${ad.description || ''}\n`;
-                    if (ad.price) resultText += `   - Giá quảng cáo: ${ad.price}\n`;
-                }
-            });
-            resultText += `\n----------------\n`;
-        }
-
-        if (data.local_results && data.local_results.places && data.local_results.places.length > 0) {
-            resultText += `\n[LOCAL PLACES FOUND] (Possible matches):\n`;
-            data.local_results.places.forEach((place, index) => {
-                resultText += `${index + 1}. ${place.title}\n`;
-                if (place.address) resultText += `   - ĐC: ${place.address}\n`;
-                if (place.rating) resultText += `   - Đánh giá: ${place.rating}⭐ (${place.reviews} reviews)\n`;
-                if (place.price) resultText += `   - Giá: ${place.price}\n`;
-            });
-            resultText += `\n----------------\n`;
-        }
-
-        if (data.knowledge_graph) {
-            resultText += `> Info: ${data.knowledge_graph.title} - ${data.knowledge_graph.description || ''}\n`;
-            if (data.knowledge_graph.detail) resultText += `> Details: ${data.knowledge_graph.detail}\n`;
-        }
-
-        if (data.organic_results && data.organic_results.length > 0) {
-            data.organic_results.forEach((item, index) => {
-                if (item.snippet) {
-                    resultText += `- [${item.title}]: ${item.snippet}\n`;
-                    if (item.sitelinks) {
-                        if (item.sitelinks.inline) {
-                            const links = item.sitelinks.inline.map(l => l.title).join(', ');
-                            resultText += `  > Quick Links: ${links}\n`;
-                        }
-                        if (item.sitelinks.expanded) {
-                            item.sitelinks.expanded.forEach(link => {
-                                resultText += `  > ${link.title}: ${link.snippet || ''}\n`;
-                            });
-                        }
-                    }
-                }
-            });
-        }
-
+        let resultText = `[FIRECRAWL SEARCH RESULTS]\nQuery: "${query}"\n\n`;
+        
+        data.data.forEach((item, index) => {
+            resultText += `=== Source ${index + 1}: ${item.title || 'Untitled'} ===\n`;
+            resultText += `URL: ${item.url}\n`;
+            if (item.markdown) {
+                // Giới hạn độ dài markdown để tránh quá token
+                resultText += `Content: ${item.markdown.substring(0, 500)}...\n\n`;
+            } else if (item.description) {
+                resultText += `Summary: ${item.description}\n\n`;
+            }
+        });
+        
         return resultText;
 
     } catch (e) {
         return null;
     }
+}
+
+// --- Tool 4: Binance Crypto Data (New) ---
+async function getBinanceData(query) {
+    try {
+        // Simple heuristic mapping for common coins
+        let symbol = "BTCUSDT"; // Default
+        const q = query.toUpperCase();
+        
+        if (q.includes("ETH") || q.includes("ETHEREUM")) symbol = "ETHUSDT";
+        else if (q.includes("BNB")) symbol = "BNBUSDT";
+        else if (q.includes("SOL")) symbol = "SOLUSDT";
+        else if (q.includes("DOGE")) symbol = "DOGEUSDT";
+        else if (q.includes("ADA") || q.includes("CARDANO")) symbol = "ADAUSDT";
+        else if (q.includes("XRP")) symbol = "XRPUSDT";
+        // Attempt to extract 3-4 letter symbol if present
+        else {
+             const potentialSymbol = q.match(/\b[A-Z]{3,4}\b/);
+             if (potentialSymbol) symbol = `${potentialSymbol[0]}USDT`;
+        }
+
+        const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
+        if (!res.ok) return null; // Fallback if symbol not found
+
+        const data = await res.json();
+        
+        // Format as structured data for LLM to build a table
+        return `[BINANCE MARKET DATA - REALTIME]
+Symbol: ${data.symbol}
+Current Price: ${parseFloat(data.lastPrice).toLocaleString()} USDT
+Price Change (24h): ${parseFloat(data.priceChange).toLocaleString()} USDT
+Change Percent (24h): ${data.priceChangePercent}%
+High (24h): ${parseFloat(data.highPrice).toLocaleString()} USDT
+Low (24h): ${parseFloat(data.lowPrice).toLocaleString()} USDT
+Volume (24h): ${parseFloat(data.volume).toLocaleString()} ${symbol.replace('USDT','')}
+Quote Volume (24h): ${parseFloat(data.quoteVolume).toLocaleString()} USDT
+Time: ${new Date(data.closeTime).toLocaleString('vi-VN')}
+`;
+    } catch (e) { return null; }
 }
 
 // ==========================================
@@ -137,9 +147,9 @@ export async function onRequestPost(context) {
     try {
         const { modelName, messages } = await request.json();
 
-        // Config Key - ĐÃ CẬP NHẬT MINI MODEL
+        // Config Key
         const apiConfig = {
-            'Mini': { key: env.MINI_API_KEY, model: 'arcee-ai/trinity-mini:free' }, // <-- UPDATED
+            'Mini': { key: env.MINI_API_KEY, model: 'arcee-ai/trinity-mini:free' }, 
             'Smart': { key: env.SMART_API_KEY, model: 'google/gemini-flash-1.5-8b' },
             'Nerd': { key: env.NERD_API_KEY, model: 'x-ai/grok-4.1-fast:free' }
         };
@@ -151,48 +161,69 @@ export async function onRequestPost(context) {
         let injectionData = "";
         let toolUsed = null;
 
+        // --- DANH SÁCH TỪ KHÓA (Logic người dùng yêu cầu) ---
+        
+        // 🟥 Những loại câu hỏi KHÔNG nên search (Red List)
+        const skipSearchKeywords = /(giải toán|code|lập trình|javascript|python|html|css|fix bug|lỗi|logic|ngữ pháp|tiếng anh|viết văn|viết mail|văn mẫu|kiến thức chung|trái đất quay quanh gì|định nghĩa|khái niệm|công thức|tính toán|giai toan|lap trinh|ngu phap|viet van|van mau|kien thuc chung|trai dat|dinh nghia|khai niem|cong thuc|tinh toan)/;
+        
+        // 🟩 Những loại câu hỏi CHẮC CHẮN cần search (Green List)
         const mustSearchKeywords = [
-            'quán', 'nhà hàng', 'ở đâu', 'địa chỉ', 'gần đây', 'đường nào', 'bản đồ', 'map',
-            'quan', 'nha hang', 'o dau', 'dia chi', 'gan day', 'duong nao', 'ban do',
-            'hôm nay', 'ngày mai', 'bây giờ', 'hiện tại', 'thời tiết', 'nhiệt độ', 'mưa', 'nắng',
-            'hom nay', 'ngay mai', 'bay gio', 'hien tai', 'thoi tiet', 'nhiet do', 'mua', 'nang',
-            'tin tức', 'sự kiện', 'mới nhất', 'vừa xảy ra', 'biến động', 'scandal', 'drama',
-            'tin tuc', 'su kien', 'moi nhat', 'gan nhat', 'vua xay ra', 'bien dong',
-            'giá', 'bao nhiêu', 'chi phí', 'tỷ giá', 'vàng', 'coin', 'crypto', 'chứng khoán', 'cổ phiếu', 'mua', 'bán', 'vé',
-            'gia', 'bao nhieu', 'chi phi', 'ty gia', 'vang', 'chung khoan', 'co phieu', 've',
-            'lịch', 'kết quả', 'giờ mở cửa', 'kẹt xe', 'tắc đường', 'giao thông', 'là ai', 'là gì', 'tiểu sử', 'review',
-            'lich', 'ket qua', 'gio mo cua', 'ket xe', 'tac duong', 'giao thong', 'la ai', 'la gi', 'tieu su'
+            'địa chỉ', 'quán', 'nhà hàng', 'ở đâu', 'gần đây', 'đường nào', 'bản đồ', 
+            'dia chi', 'quan', 'nha hang', 'o dau', 'gan day', 'duong nao', 'ban do',
+            'thời tiết', 'hôm nay', 'ngày mai', 'nhiệt độ', 'mưa', 'nắng',
+            'thoi tiet', 'hom nay', 'ngay mai', 'nhiet do',
+            'tin tức', 'sự kiện', 'mới nhất', 'vừa xảy ra', 'biến động',
+            'tin tuc', 'su kien', 'moi nhat', 'vua xay ra', 'bien dong',
+            'giá', 'chi phí', 'bao nhiêu tiền', 'tỷ giá', 'vàng',
+            'gia', 'chi phi', 'bao nhieu tien', 'ty gia', 'vang',
+            'giờ mở cửa', 'tình trạng giao thông', 'kẹt xe', 'tắc đường',
+            'gio mo cua', 'giao thong', 'ket xe', 'tac duong',
+            'hiện tại', 'bây giờ', 'hien tai', 'bay gio', 'có quán nào', 'co quan nao'
         ];
 
-        const skipSearchKeywords = /(viết code|sửa lỗi|lập trình|giải toán|phương trình|đạo hàm|tích phân|văn học|bài văn|thuyết minh|định nghĩa|khái niệm|lý thuyết|công thức|javascript|python|css|html|dịch sang|translate|viet code|sua loi|lap trinh|giai toan|phuong trinh|dao ham|tich phan|van hoc|bai van|thuyet minh|dinh nghia|khai niem|ly thuyet|cong thuc|dich sang)/;
-        
-        const hasRealtimeKeyword = /(giá|mới nhất|hôm nay|bây giờ|hiện tại|gia|moi nhat|hom nay|bay gio|hien tai)/.test(lastMsg);
-        const shouldSkipSearch = skipSearchKeywords.test(lastMsg) && !hasRealtimeKeyword;
+        // Crypto specific keywords for Binance
+        const cryptoKeywords = /(crypto|coin|bitcoin|eth|bnb|usdt|token|thị trường ảo|thi truong ao|giá coin|gia coin)/;
+
+        // Logic check
+        const shouldSkipSearch = skipSearchKeywords.test(lastMsg);
+        const isMustSearch = mustSearchKeywords.some(kw => lastMsg.includes(kw));
+        const isCryptoQuery = cryptoKeywords.test(lastMsg);
 
         if (!shouldSkipSearch) {
-            const isMustSearch = mustSearchKeywords.some(kw => lastMsg.includes(kw));
+            
+            // 1. Time Check (Always helpful for "now/today")
+            if (lastMsg.match(/(giờ|ngày|hôm nay|thứ mấy|bây giờ|gio|ngay|hom nay|thu may|bay gio)/)) {
+                injectionData += `SYSTEM TIME: ${getCurrentTime()}\n\n`;
+                toolUsed = "Time";
+            }
 
-            if (isMustSearch || lastMsg.length > 20) {
-                if (lastMsg.match(/(giờ|ngày|hôm nay|thứ mấy|bây giờ|gio|ngay|hom nay|thu may|bay gio)/)) {
-                    injectionData += `SYSTEM TIME: ${getCurrentTime()}\n\n`;
-                    toolUsed = "Time";
-                }
+            // 2. Weather Check
+            if (lastMsg.match(/(thời tiết|nhiệt độ|mưa|nắng|thoi tiet|nhiet do|mua|nang)/)) {
+                const weatherData = await getWeather(lastMsg);
+                if (weatherData) injectionData += weatherData + "\n\n";
+            }
 
-                if (lastMsg.match(/(thời tiết|nhiệt độ|mưa|nắng|thoi tiet|nhiet do|mua|nang)/)) {
-                    const weatherData = await getWeather(lastMsg);
-                    if (weatherData) injectionData += weatherData + "\n\n";
+            // 3. Binance Crypto Check
+            if (isCryptoQuery) {
+                const binanceData = await getBinanceData(lastMsg);
+                if (binanceData) {
+                    injectionData += binanceData + "\n\n";
+                    toolUsed = "Binance API";
                 }
+            }
 
-                const serpKey = env.SERPAPI_KEY; 
-                if (serpKey) {
-                    const searchData = await searchGoogle(lastMsg, serpKey);
-                    if (searchData) {
-                        injectionData += searchData + "\n\n";
-                        toolUsed = "Google Search";
-                    }
-                } else {
-                    injectionData += "[SYSTEM NOTE: Search capability unavailable (Missing API Key)]\n";
-                }
+            // 4. Firecrawl Search (Must Search OR Long query that is not Red Listed)
+            if (isMustSearch && !toolUsed) { // Ưu tiên Binance nếu đã dùng rồi thì thôi search chung chung (trừ khi cần news)
+                 const firecrawlKey = env.FIRECRAWL_KEY;
+                 if (firecrawlKey) {
+                     const searchData = await searchFirecrawl(lastMsg, firecrawlKey);
+                     if (searchData) {
+                         injectionData += searchData + "\n\n";
+                         toolUsed = "Firecrawl Search";
+                     }
+                 } else {
+                     injectionData += "[SYSTEM NOTE: Search capability unavailable (Missing Firecrawl API Key)]\n";
+                 }
             }
         }
 
@@ -200,23 +231,25 @@ export async function onRequestPost(context) {
 
         if (injectionData) {
             const systemPrompt = `
-You are Oceep, an AI assistant. You have just performed a REAL-TIME Google Search for this query.
-Below is the search result data:
+You are Oceep, an intelligent AI assistant.
+You have access to real-time tools. Below is the data retrieved for this request:
 
-=== START OF SEARCH DATA ===
+=== START OF REAL-TIME DATA ===
 ${injectionData}
-=== END OF SEARCH DATA ===
+=== END OF REAL-TIME DATA ===
 
 INSTRUCTIONS:
-1.  **Context:** The user likely misspelled names or asked colloquially. Use the "LOCAL PLACES FOUND" section to identify the correct place/entity.
-2.  **Clarify:** If multiple similar places exist (e.g., "Thủy Tạ Cafe" vs "Thủy Tạ Restaurant"), mention them and ask which one they meant, but assume the most popular one first if providing info.
-3.  **Accuracy:** Quote prices, addresses, and hours EXACTLY from the data.
-4.  **No Refusal:** Do NOT say "I cannot browse the web". You HAVE the data above.
-5.  **Language:** Answer in Vietnamese.
+1. **Search Results (Firecrawl):** If data comes from Firecrawl, synthesize the information to answer the user's question accurately. Mention addresses, prices, and opening hours if available.
+2. **Crypto Data (Binance):** If data comes from Binance, **YOU MUST OUTPUT A MARKDOWN TABLE**.
+   - Format: | Indicator | Value |
+   - Provide a brief analysis below the table (Bullish/Bearish trend based on % change).
+3. **No Refusal:** Do not say "I cannot access the internet". Use the provided data.
+4. **Language:** Answer in Vietnamese (unless requested otherwise).
+5. **Formatting:** Use Markdown bolding for key figures.
 `;
             finalMessages.push({ role: "system", content: systemPrompt });
         } else if (shouldSkipSearch) {
-            finalMessages.push({ role: "system", content: "Task requires internal knowledge (Code/Math/Creative). Do NOT hallucinate real-time facts." });
+            finalMessages.push({ role: "system", content: "Task requires internal knowledge (Code/Math/Creative). Do NOT hallucinate real-time facts. Focus on logic and accuracy." });
         }
 
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
