@@ -4,7 +4,7 @@
 // 1. LOGIC BẢO MẬT & KHỞI TẠO CƠ BẢN                                  //
 //=====================================================================//
 
-// Kiểm tra khóa bảo mật ngay lập tức
+// Kiểm tra khóa bảo mật
 try {
     if (localStorage.getItem('isLocked') === 'true') {
         window.location.href = 'verify.html';
@@ -17,7 +17,14 @@ try {
 // Helper: Copy Code
 window.copyToClipboard = function(btn) {
     try {
-        const codeElement = btn.closest('.code-box-header').nextElementSibling.querySelector('code');
+        // Tìm element code dựa trên cấu trúc HTML tạo ra bởi formatAIResponse
+        const header = btn.closest('.code-box-header');
+        if (!header) return;
+        const contentDiv = header.nextElementSibling;
+        if (!contentDiv) return;
+        const codeElement = contentDiv.querySelector('code');
+        if (!codeElement) return;
+
         const codeText = codeElement.innerText;
         navigator.clipboard.writeText(codeText).then(() => {
             const originalHTML = btn.innerHTML;
@@ -40,7 +47,6 @@ const tokenConfig = {
 // 2. DOM ELEMENTS & STATE                                             //
 //=====================================================================//
 
-// Elements - Sử dụng getElementById an toàn
 const getEl = (id) => document.getElementById(id);
 const textElements = {
     header: getEl('header-title'),
@@ -73,7 +79,6 @@ const textElements = {
 // Các nút & Modal
 const themeMenuButton = getEl('theme-menu-button');
 const themeModal = getEl('theme-modal');
-const modalContent = getEl('modal-content');
 const themeOptionButtons = document.querySelectorAll('.theme-option');
 const languageModal = getEl('language-modal');
 const languageOptionButtons = document.querySelectorAll('.language-option');
@@ -112,7 +117,7 @@ let conversationHistory = [];
 let chatHistories = {};
 let currentChatId = null;
 
-// Khởi tạo Model an toàn (Tránh lỗi JSON parse)
+// Khởi tạo Model
 let currentModel;
 try {
     currentModel = JSON.parse(localStorage.getItem('currentModel'));
@@ -187,6 +192,15 @@ const themeColors = {
 //=====================================================================//
 // 3. CORE FUNCTIONS                                                   //
 //=====================================================================//
+
+function escapeHTML(str) {
+    if (!str) return '';
+    return str.replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/"/g, "&quot;")
+              .replace(/'/g, "&#039;");
+}
 
 function saveStateToLocalStorage() {
     try {
@@ -428,7 +442,7 @@ if(sidebarToggle && sidebar) sidebarToggle.addEventListener('click', () => {
     sidebar.classList.toggle('hidden');
 });
 
-// --- MODEL SELECTION (FIXED) ---
+// --- MODEL SELECTION ---
 function updateModelButtonText() {
     const t = translations[currentLang] || translations['vi'];
     if (!textElements.modelBtnText) return;
@@ -529,6 +543,7 @@ document.addEventListener('click', (e) => {
 
 // Logic phân loại Search (Cập nhật theo danh sách mới)
 function shouldShowSearchStatus(text) {
+    if (!text) return false;
     // Red list - KHÔNG search
     const skipRegex = /(giải toán|code|lập trình|javascript|python|html|css|fix bug|lỗi|logic|ngữ pháp|tiếng anh|viết văn|viết mail|văn mẫu|kiến thức chung|trái đất|mặt trời|định nghĩa|khái niệm|công thức|tính toán|giai toan|lap trinh|ngu phap|viet van|van mau|kien thuc chung|trai dat|mat troi|dinh nghia|khai niem|cong thuc|tinh toan)/i;
     // Green list - CẦN search/API
@@ -571,6 +586,7 @@ function updateRandomButtonVisibility() {
 }
 
 function formatAIResponse(text) {
+    if (!text) return '';
     const codeBlocks = [];
     let processedText = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
         const index = codeBlocks.length;
@@ -582,20 +598,25 @@ function formatAIResponse(text) {
     processedText = processedText.replace(/^##\s+(.*)$/gm, '<h2 class="text-xl font-bold mt-4 mb-2 border-b border-gray-500/50 pb-1">$1</h2>');
     processedText = processedText.replace(/^###\s+(.*)$/gm, '<h3 class="text-lg font-bold mt-3 mb-1">$1</h3>');
     
-    // Xử lý Table (Markdown Tables)
-    processedText = processedText.replace(/\|(.+)\|/g, (match) => {
-        // Basic detection for markdown table rows
-        return match; 
-    });
-    // Converting Markdown Table to HTML Table for better Binance data display
+    // Xử lý Table (Markdown Tables) - SAFE VERSION
+    // Bắt đầu bằng | ... | xuống dòng | -:- |
     const tableRegex = /\|(.+)\|\n\|([-:| ]+)\|\n((?:\|.*\|\n?)*)/g;
     processedText = processedText.replace(tableRegex, (match, header, separator, body) => {
-        const headers = header.split('|').filter(h => h.trim() !== '').map(h => `<th class="px-4 py-2 bg-gray-700 border border-gray-600 font-semibold text-white">${h.trim()}</th>`).join('');
-        const rows = body.trim().split('\n').map(row => {
-            const cells = row.split('|').filter(c => c.trim() !== '').map(c => `<td class="px-4 py-2 border border-gray-600 text-gray-200">${c.trim()}</td>`).join('');
-            return `<tr class="hover:bg-gray-700/50 transition-colors">${cells}</tr>`;
-        }).join('');
-        return `<div class="overflow-x-auto my-3 rounded-lg shadow-lg"><table class="min-w-full bg-gray-800 border-collapse text-sm"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`;
+        try {
+            const safeHeader = header || "";
+            const headers = safeHeader.split('|').filter(h => h.trim() !== '').map(h => `<th class="px-4 py-2 bg-gray-700 border border-gray-600 font-semibold text-white">${h.trim()}</th>`).join('');
+            
+            const safeBody = body || "";
+            const rows = safeBody.trim().split('\n').map(row => {
+                const cells = row.split('|').filter(c => c.trim() !== '').map(c => `<td class="px-4 py-2 border border-gray-600 text-gray-200">${c.trim()}</td>`).join('');
+                return `<tr class="hover:bg-gray-700/50 transition-colors">${cells}</tr>`;
+            }).join('');
+            
+            return `<div class="overflow-x-auto my-3 rounded-lg shadow-lg"><table class="min-w-full bg-gray-800 border-collapse text-sm"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`;
+        } catch (e) {
+            console.error("Table parsing error", e);
+            return match; // Return original markdown if parsing fails
+        }
     });
 
     processedText = processedText.replace(/\n/g, '<br>');
@@ -646,12 +667,12 @@ function createMessageElement(messageContent, sender) {
                     messageWrapper.appendChild(video);
                 } else if (part.type === 'text') {
                     const textDiv = document.createElement('div');
-                    textDiv.innerHTML = part.text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    textDiv.innerHTML = escapeHTML(part.text);
                     messageWrapper.appendChild(textDiv);
                 }
             });
         } else {
-             messageWrapper.innerHTML = messageContent.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+             messageWrapper.innerHTML = escapeHTML(messageContent);
         }
     } else {
         row.classList.add('justify-start');
@@ -678,6 +699,7 @@ function renderMath(element) {
 }
 
 async function typeWriterEffect(text, element) {
+    if (!text) return;
     element.innerHTML = ''; 
     const words = text.split(/(?=\s)/g); 
     let currentText = "";
@@ -686,6 +708,7 @@ async function typeWriterEffect(text, element) {
 
     for (const word of words) {
         currentText += word;
+        // Optimization: Only format if necessary, but here we do it for correctness
         element.innerHTML = formatAIResponse(currentText);
         if(chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
         await new Promise(r => setTimeout(r, speed));
@@ -716,14 +739,16 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
         }
 
         const data = await response.json();
-        const fullText = data.content;
+        // Standard check instead of Optional Chaining for compat
+        const fullText = (data && data.content) ? data.content : ""; 
+        
         await typeWriterEffect(fullText, aiMessageEl.firstChild);
         return fullText;
 
     } catch (error) {
         if (error.name === 'AbortError') return aiMessageEl.firstChild.innerText;
         console.error("Fetch Error:", error);
-        let userMsg = translations[currentLang]?.errorPrefix || "Đã có lỗi xảy ra.";
+        let userMsg = (translations[currentLang] && translations[currentLang].errorPrefix) ? translations[currentLang].errorPrefix : "Đã có lỗi xảy ra.";
         if (error.message) userMsg += ` (${error.message})`;
         aiMessageEl.firstChild.innerHTML = `<span class="text-red-400">${userMsg}</span>`;
         throw error;
@@ -781,6 +806,7 @@ if(chatFormEl) {
         aiMessageEl.firstChild.classList.add('streaming'); 
         aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse">AI đang trả lời...</span>';
 
+        // Search Status Logic
         const searchStatusTimer = setTimeout(() => {
             if (shouldShowSearchStatus(message)) {
                 aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse text-blue-400">Đang tìm kiếm thông tin...</span>';
@@ -1051,7 +1077,7 @@ function renderHistoryList() {
         const history = chatHistories[chatId];
         if (chatId === currentChatId && history.length === 0) return;
 
-        let firstMessageText = translations[currentLang]?.newChatHistory || "Cuộc trò chuyện mới";
+        let firstMessageText = (translations[currentLang] && translations[currentLang].newChatHistory) ? translations[currentLang].newChatHistory : "Cuộc trò chuyện mới";
         if (history.length > 0) {
             const firstContent = history[0].content;
             if (typeof firstContent === 'string') {
@@ -1213,4 +1239,7 @@ function handleUpdateLog() {
         if (dontShowAgainCheckbox && dontShowAgainCheckbox.checked) localStorage.setItem('seenUpdateLogVersion', updateLogVersion);
         showModal(updateLogModal, false);
     };
+
+    // FIXED: Event listener was missing
+    if(closeUpdateLogBtn) closeUpdateLogBtn.addEventListener('click', closeAndSavePreference);
 }
