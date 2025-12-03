@@ -149,8 +149,8 @@ export async function onRequestPost(context) {
 
         // Config Key
         const apiConfig = {
-            'Mini': { key: env.MINI_API_KEY, model: 'arcee-ai/trinity-mini:free' }, 
-            'Smart': { key: env.SMART_API_KEY, model: 'google/gemini-flash-1.5-8b' },
+            'Mini': { key: env.MINI_API_KEY, model: 'kwaipilot/kat-coder-pro:free' }, 
+            'Smart': { key: env.SMART_API_KEY, model: 'amazon/nova-2-lite-v1:free' },
             'Nerd': { key: env.NERD_API_KEY, model: 'x-ai/grok-4.1-fast:free' }
         };
         const config = apiConfig[modelName];
