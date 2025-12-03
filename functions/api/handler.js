@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 // ==========================================
-// 1. CÁC HÀM TOOLS
+// 1. CÁC HÀM TOOLS (FREE & NO-BLOCK)
 // ==========================================
 
 // --- Tool 1: Thời gian ---
@@ -18,39 +18,84 @@ function getCurrentTime() {
     return `${date} | ${time}`;
 }
 
-// --- Tool 2: Google Custom Search (Giải pháp duy nhất ổn định trên Cloudflare) ---
-async function searchGoogleCustom(query, apiKey, cxId) {
+// --- Tool 2: SearXNG (Web Search miễn phí, trả về JSON) ---
+async function searchSearXNG(query) {
     const startTime = Date.now();
+    
+    // Danh sách các Public Instances ổn định (Dự phòng nhau)
+    const instances = [
+        'https://searx.be', 
+        'https://search.ononoki.org',
+        'https://searx.ngn.tf'
+    ];
+
+    for (const host of instances) {
+        try {
+            // Gọi API JSON của SearXNG
+            const url = `${host}/search?q=${encodeURIComponent(query)}&format=json&categories=general&language=vi-VN`;
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000); // Timeout 4s mỗi host
+
+            const res = await fetch(url, { 
+                signal: controller.signal,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+            });
+            clearTimeout(timeoutId);
+
+            if (!res.ok) continue; // Thử host khác nếu lỗi
+
+            const data = await res.json();
+            if (!data.results || data.results.length === 0) continue;
+
+            // Xử lý kết quả
+            const endTime = Date.now();
+            const duration = ((endTime - startTime) / 1000).toFixed(2);
+            let resultText = `[WEB SEARCH RESULTS - SearXNG]\nQuery: "${query}"\n`;
+            resultText += `⏱️ (Đã tìm kiếm trong ${duration} giây)\n\n`;
+
+            // Lấy 5 kết quả đầu
+            data.results.slice(0, 5).forEach((item, index) => {
+                resultText += `${index + 1}. [${item.title}](${item.url})\n`;
+                const content = item.content || item.snippet || "";
+                resultText += `   > ${content.replace(/<\/?[^>]+(>|$)/g, "")}\n\n`; // Xóa HTML tags
+            });
+
+            return resultText; // Trả về ngay khi thành công
+
+        } catch (e) {
+            // Bỏ qua lỗi để thử host tiếp theo
+            console.error(`SearXNG error on ${host}:`, e);
+        }
+    }
+    return null; // Thất bại toàn tập
+}
+
+// --- Tool 3: Wikipedia API (Dự phòng cực mạnh cho định nghĩa/nhân vật) ---
+async function searchWikipedia(query) {
     try {
-        if (!apiKey || !cxId) return null;
-
-        const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cxId}&q=${encodeURIComponent(query)}&num=5&lr=lang_vi`;
+        const url = `https://vi.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&utf8=`;
         const res = await fetch(url);
-        
-        if (!res.ok) return null;
-        
         const data = await res.json();
-        if (!data.items || data.items.length === 0) return null;
 
-        const endTime = Date.now();
-        const duration = ((endTime - startTime) / 1000).toFixed(2);
+        if (!data.query || !data.query.search || data.query.search.length === 0) return null;
 
-        let resultText = `[GOOGLE SEARCH RESULTS]\nQuery: "${query}"\n`;
-        resultText += `⏱️ (Đã tìm kiếm trong ${duration} giây)\n\n`;
-
-        data.items.forEach((item, index) => {
-            resultText += `${index + 1}. [${item.title}](${item.link})\n`;
-            resultText += `   > ${item.snippet}\n\n`;
+        let resultText = `[WIKIPEDIA SEARCH RESULTS]\nQuery: "${query}"\n\n`;
+        
+        data.query.search.slice(0, 3).forEach((item, index) => {
+            // Clean HTML tags từ snippet của Wiki
+            const snippet = item.snippet.replace(/<[^>]*>?/gm, '');
+            resultText += `${index + 1}. [${item.title}](https://vi.wikipedia.org/wiki/${encodeURIComponent(item.title)})\n`;
+            resultText += `   > ${snippet}...\n\n`;
         });
 
         return resultText;
-    } catch (e) {
-        console.error("Search Error:", e);
-        return null;
-    }
+    } catch (e) { return null; }
 }
 
-// --- Tool 3: Thời tiết (Open-Meteo) ---
+// --- Tool 4: Thời tiết (Open-Meteo) ---
 async function getWeather(query) {
     try {
         let loc = query.replace(/(thời tiết|nhiệt độ|dự báo|tại|ở|hôm nay|thế nào|\?|thoi tiet|nhiet do|du bao|tai|o|hom nay|the nao)/gi, '').trim();
@@ -81,7 +126,7 @@ async function getWeather(query) {
     } catch (e) { return null; }
 }
 
-// --- Tool 4: Binance Crypto Data ---
+// --- Tool 5: Binance Crypto Data ---
 async function getBinanceData(query) {
     try {
         let symbol = "BTCUSDT"; 
@@ -130,20 +175,19 @@ export async function onRequestPost(context) {
     try {
         const { modelName, messages } = await request.json();
 
-        // --- CẤU HÌNH API KEYS & MODELS (ĐÃ CẬP NHẬT) ---
-        // Lưu ý: Key thực tế lấy từ Cloudflare Env Variable (Settings -> Variables)
+        // --- CẤU HÌNH API KEYS ---
         const apiConfig = {
             'Mini': { 
-                key: env.MINI_API_KEY, // Key OpenRouter của bạn
-                model: 'kwaipilot/kat-coder-pro:free' // Model bạn yêu cầu
+                key: env.MINI_API_KEY, 
+                model: 'kwaipilot/kat-coder-pro:free' 
             }, 
             'Smart': { 
-                key: env.SMART_API_KEY, // Key OpenRouter của bạn
-                model: 'amazon/nova-2-lite-v1:free' // Model bạn yêu cầu
+                key: env.SMART_API_KEY, 
+                model: 'amazon/nova-2-lite-v1:free' 
             },
             'Nerd': { 
                 key: env.NERD_API_KEY, 
-                model: 'x-ai/grok-4.1-fast:free' // Giữ nguyên hoặc đổi nếu muốn
+                model: 'x-ai/grok-4.1-fast:free' 
             }
         };
 
@@ -172,7 +216,7 @@ export async function onRequestPost(context) {
             'giờ mở cửa', 'tình trạng giao thông', 'kẹt xe', 'tắc đường',
             'gio mo cua', 'giao thong', 'ket xe', 'tac duong',
             'hiện tại', 'bây giờ', 'hien tai', 'bay gio', 'có quán nào', 'co quan nao',
-            'review', 'đánh giá', 'danh gia'
+            'review', 'đánh giá', 'danh gia', 'tìm kiếm', 'search', 'tim kiem'
         ];
 
         const cryptoKeywords = /(crypto|coin|bitcoin|eth|bnb|usdt|token|thị trường ảo|thi truong ao|giá coin|gia coin)/;
@@ -204,21 +248,25 @@ export async function onRequestPost(context) {
                 }
             }
 
-            // 4. Google Search (Khi cần thiết và chưa dùng tool khác)
-            if (isMustSearch && !toolUsed) {
-                // Lấy Key từ Env Variables
-                const googleKey = env.GOOGLE_SEARCH_API_KEY; 
-                const googleCx = env.GOOGLE_SEARCH_CX;
-
-                if (googleKey && googleCx) {
-                    const searchData = await searchGoogleCustom(lastMsg, googleKey, googleCx);
-                    if (searchData) {
-                        injectionData += searchData + "\n\n";
-                        toolUsed = "Web Search";
+            // 4. Web Search (SearXNG -> Fallback Wikipedia)
+            // Logic: Nếu chưa dùng Crypto/Weather thì mới Search Web
+            if ((isMustSearch || lastMsg.length > 15) && !toolUsed) {
+                // Thử SearXNG trước (General Search)
+                const searchData = await searchSearXNG(lastMsg);
+                if (searchData) {
+                    injectionData += searchData + "\n\n";
+                    toolUsed = "Web Search (SearXNG)";
+                } 
+                // Nếu SearXNG tạch (hoặc trả về rỗng), thử tiếp Wikipedia (tốt cho định nghĩa/người)
+                else {
+                    const wikiData = await searchWikipedia(lastMsg);
+                    if (wikiData) {
+                        injectionData += wikiData + "\n\n";
+                        toolUsed = "Wikipedia Search";
+                    } else {
+                         // Nếu cả 2 đều không được
+                         injectionData += "[SYSTEM NOTE: Attempted to search web but external search providers are busy/blocking. Answer based on internal knowledge if possible.]\n";
                     }
-                } else {
-                    // Nếu người dùng chưa cấu hình Key, báo lỗi hệ thống để biết đường sửa
-                    injectionData += "[SYSTEM NOTE: Web search is required but GOOGLE_SEARCH_API_KEY or GOOGLE_SEARCH_CX is missing in Cloudflare Environment Variables. Please setup to enable search.]\n";
                 }
             }
         }
@@ -235,9 +283,11 @@ ${injectionData}
 === END OF REAL-TIME DATA ===
 
 INSTRUCTIONS:
-1. **Search Results:** Use the provided search results to answer. The user wants accurate, up-to-date info. Mention the time taken if provided.
-2. **Crypto Data:** If data is from Binance, **OUTPUT A MARKDOWN TABLE** with indicators and values.
-3. **No Refusal:** Do not say "I cannot access the internet" or "I am just an AI". You HAVE the data above.
+1. **Search Results:** Use the provided search results to answer accurately. 
+   - If results are from SearXNG/Google, include the provided search duration in your response.
+   - If results are from Wikipedia, summarize the key points.
+2. **Crypto Data:** If data is from Binance, **OUTPUT A MARKDOWN TABLE**.
+3. **No Refusal:** Do not complain about internet access. Use the provided data.
 4. **Language:** Answer in Vietnamese.
 `;
             finalMessages.push({ role: "system", content: systemPrompt });
