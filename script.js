@@ -243,7 +243,6 @@ function applyTheme(theme) {
         textElements.logoText.classList.add(config.logo);
     }
 
-    // Cập nhật giao diện an toàn (kiểm tra element tồn tại)
     if(sidebar) {
         sidebar.classList.remove(...allConfigs.flatMap(c => c.sidebar || []).flat());
         sidebar.classList.add(...(config.sidebar || []));
@@ -349,7 +348,6 @@ function switchLanguage(lang) {
     document.documentElement.lang = lang;
     localStorage.setItem('language', lang);
     
-    // updateActiveLanguageButton(lang);
     languageOptionButtons.forEach(btn => {
         btn.classList.remove('bg-blue-500/20', 'text-blue-600');
         if (btn.dataset.lang === lang) btn.classList.add('bg-blue-500/20', 'text-blue-600');
@@ -529,13 +527,15 @@ document.addEventListener('click', (e) => {
 // 4. CHAT LOGIC & RENDER                                              //
 //=====================================================================//
 
-// Logic phân loại Search
-const searchKeywordsRegex = /(quán|nhà hàng|ở đâu|địa chỉ|gần đây|đường nào|bản đồ|quan|nha hang|o dau|dia chi|gan day|duong nao|ban do|hôm nay|ngày mai|bây giờ|hiện tại|thời tiết|nhiệt độ|mưa không|hom nay|ngay mai|bay gio|hien tai|thoi tiet|nhiet do|mua khong|tin tức|sự kiện|mới nhất|vừa xảy ra|biến động|scandal|tin tuc|su kien|moi nhat|vua xay ra|bien dong|giá|bao nhiêu tiền|chi phí|tỷ giá|giá vàng|coin|crypto|chứng khoán|cổ phiếu|mua|bán|gia|bao nhieu tien|chi phi|ty gia|gia vang|chung khoan|co phieu|lịch thi đấu|kết quả|giờ mở cửa|kẹt xe|tắc đường|giao thông|lich thi dau|ket qua|gio mo cua|ket xe|tac duong|giao thong)/i;
-
+// Logic phân loại Search (Cập nhật theo danh sách mới)
 function shouldShowSearchStatus(text) {
-    const skipRegex = /(viết code|sửa lỗi|lập trình|giải toán|phương trình|đạo hàm|tích phân|văn học|bài văn|javascript|python|css|html|dịch sang|translate)/i;
+    // Red list - KHÔNG search
+    const skipRegex = /(giải toán|code|lập trình|javascript|python|html|css|fix bug|lỗi|logic|ngữ pháp|tiếng anh|viết văn|viết mail|văn mẫu|kiến thức chung|trái đất|mặt trời|định nghĩa|khái niệm|công thức|tính toán|giai toan|lap trinh|ngu phap|viet van|van mau|kien thuc chung|trai dat|mat troi|dinh nghia|khai niem|cong thuc|tinh toan)/i;
+    // Green list - CẦN search/API
+    const mustSearchRegex = /(địa chỉ|quán|nhà hàng|ở đâu|gần đây|thời tiết|hôm nay|ngày mai|tin tức|sự kiện|giá|tỷ giá|vàng|crypto|coin|bitcoin|eth|giờ mở cửa|giao thông|kẹt xe|dia chi|quan|nha hang|o dau|gan day|thoi tiet|hom nay|ngay mai|tin tuc|su kien|gia|ty gia|vang|gio mo cua|giao thong|ket xe|hiện tại|bây giờ|hien tai|bay gio)/i;
+
     if (skipRegex.test(text)) return false;
-    return searchKeywordsRegex.test(text);
+    return mustSearchRegex.test(text);
 }
 
 function startNewChat() {
@@ -581,6 +581,23 @@ function formatAIResponse(text) {
     processedText = processedText.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-blue-400">$1</strong>');
     processedText = processedText.replace(/^##\s+(.*)$/gm, '<h2 class="text-xl font-bold mt-4 mb-2 border-b border-gray-500/50 pb-1">$1</h2>');
     processedText = processedText.replace(/^###\s+(.*)$/gm, '<h3 class="text-lg font-bold mt-3 mb-1">$1</h3>');
+    
+    // Xử lý Table (Markdown Tables)
+    processedText = processedText.replace(/\|(.+)\|/g, (match) => {
+        // Basic detection for markdown table rows
+        return match; 
+    });
+    // Converting Markdown Table to HTML Table for better Binance data display
+    const tableRegex = /\|(.+)\|\n\|([-:| ]+)\|\n((?:\|.*\|\n?)*)/g;
+    processedText = processedText.replace(tableRegex, (match, header, separator, body) => {
+        const headers = header.split('|').filter(h => h.trim() !== '').map(h => `<th class="px-4 py-2 bg-gray-700 border border-gray-600 font-semibold text-white">${h.trim()}</th>`).join('');
+        const rows = body.trim().split('\n').map(row => {
+            const cells = row.split('|').filter(c => c.trim() !== '').map(c => `<td class="px-4 py-2 border border-gray-600 text-gray-200">${c.trim()}</td>`).join('');
+            return `<tr class="hover:bg-gray-700/50 transition-colors">${cells}</tr>`;
+        }).join('');
+        return `<div class="overflow-x-auto my-3 rounded-lg shadow-lg"><table class="min-w-full bg-gray-800 border-collapse text-sm"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`;
+    });
+
     processedText = processedText.replace(/\n/g, '<br>');
 
     processedText = processedText.replace(/__CODE_BLOCK_(\d+)__/g, (match, index) => {
@@ -804,7 +821,7 @@ if(chatFormEl) {
     });
 }
 
-// Token & Inputs
+// Token & Inputs (Không đổi logic)
 const currentTokenInput = getEl('current-token-input');
 const maxTokenInput = getEl('max-token-input');
 const tokenInputsContainer = getEl('token-inputs-container');
@@ -1196,6 +1213,4 @@ function handleUpdateLog() {
         if (dontShowAgainCheckbox && dontShowAgainCheckbox.checked) localStorage.setItem('seenUpdateLogVersion', updateLogVersion);
         showModal(updateLogModal, false);
     };
-    if (closeUpdateLogBtn) closeUpdateLogBtn.addEventListener('click', closeAndSavePreference);
-    if (updateLogModal) updateLogModal.addEventListener('click', (e) => { if(e.target === updateLogModal) closeAndSavePreference(); });
 }
