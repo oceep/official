@@ -1,200 +1,183 @@
 // functions/api/handler.js
 
+// ----------------------------
+// CORS
+// ----------------------------
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Title',
 };
 
-// ==========================================
-// 1. TOOL: DUCKDUCKGO SEARCH (Lite Version)
-// ==========================================
-async function searchDuckDuckGo(query) {
+// ----------------------------
+// 1. WORKING SEARCH ENGINE (BRAVE SEARCH – FREE, NO API KEY)
+// ----------------------------
+async function webSearch(query) {
     try {
-        const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+        const url = `https://search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
 
         const res = await fetch(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html',
-                'Referer': 'https://duckduckgo.com/',
-                'Origin': 'https://duckduckgo.com'
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/json"
             }
         });
-
-        const html = await res.text();
-
-        const regex = /<a[^>]*href="([^"]+)"[^>]*class="[^"]*result-link[^"]*"[^>]*>(.*?)<\/a>[\s\S]*?<td[^>]*class="result-snippet"[^>]*>(.*?)<\/td>/g;
-
-        const results = [];
-        let match;
-        let count = 0;
-
-        while ((match = regex.exec(html)) !== null && count < 3) {
-            let link = match[1];
-            let title = match[2].replace(/<[^>]*>/g, '').trim();
-            let snippet = match[3].replace(/<[^>]*>/g, '').trim();
-
-            if (link.startsWith('/l/?')) {
-                const decoded = link.split("uddg=")[1];
-                if (decoded) link = decodeURIComponent(decoded);
-            }
-
-            results.push({ link, title, snippet });
-            count++;
-        }
-
-        return results.length > 0 ? results : null;
-    } catch (e) {
-        console.error("DDG Error:", e);
-        return null;
-    }
-}
-
-// ==========================================
-// 2. TOOL: NATIVE SCRAPER (Tự làm)
-// ==========================================
-async function scrapeContentFree(url) {
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-        const res = await fetch(url, {
-            signal: controller.signal,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }
-        });
-
-        clearTimeout(timeoutId);
 
         if (!res.ok) return null;
 
-        let html = await res.text();
+        const data = await res.json();
+        if (!data.web || !data.web.results) return null;
 
-        html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gmi, "");
-        html = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gmi, "");
-        html = html.replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gmi, "");
-        html = html.replace(/<footer\b[^>]*>[\s\S]*?<\/footer>/gmi, "");
-        html = html.replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gmi, "");
-        html = html.replace(/<!--[\s\S]*?-->/g, ""); // FIX LỖI 100%
-        html = html.replace(/<[^>]+>/g, " ");
+        return data.web.results.map(r => ({
+            title: r.title,
+            link: r.url,
+            snippet: r.description
+        }));
 
-        let text = html.replace(/\s+/g, " ").trim();
-
-        return text.slice(0, 1500);
     } catch (e) {
+        console.error("Brave Search Error:", e);
         return null;
     }
 }
 
-// ==========================================
-// 3. TOOL: AI DECISION MAKER
-// ==========================================
-async function decideToSearch(query, apiKey) {
+// ----------------------------
+// 2. SIMPLE SCRAPER (SAFE)
+// ----------------------------
+async function scrapePage(url) {
+    try {
+        const res = await fetch(url, {
+            headers: { "User-Agent": "Mozilla/5.0" }
+        });
+
+        if (!res.ok) return null;
+        let html = await res.text();
+
+        html = html.replace(/<script[\s\S]*?<\/script>/gi, "");
+        html = html.replace(/<style[\s\S]*?<\/style>/gi, "");
+        html = html.replace(/<[^>]+>/g, " ");
+        html = html.replace(/\s+/g, " ").trim();
+
+        return html.slice(0, 1500);
+    } catch {
+        return null;
+    }
+}
+
+// ----------------------------
+// 3. AI DECISION MAKER
+// ----------------------------
+async function shouldSearchQuery(query, apiKey) {
     if (!apiKey) return true;
 
     try {
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
+        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-                'HTTP-Referer': 'https://oceep.pages.dev/',
-                'X-Title': 'Oceep Classifier'
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                model: 'arcee-ai/trinity-mini:free',
+                model: "arcee-ai/trinity-mini:free",
                 messages: [
-                    {
-                        role: "system",
-                        content: `Does the query need real-time external info (news, facts, prices, weather)?
-Reply "true" if YES. Reply "false" if NO. Output ONLY "true" or "false".`
-                    },
+                    { role: "system", content: "Output true if the question needs real-time info. Output false otherwise. ONLY return true/false." },
                     { role: "user", content: query }
                 ],
-                max_tokens: 5, temperature: 0
+                max_tokens: 5,
+                temperature: 0
             })
         });
 
-        const data = await response.json();
-        const decision = data?.choices?.[0]?.message?.content?.toLowerCase() || "true";
-        return decision.includes("true");
+        const data = await res.json();
+        const t = data.choices?.[0]?.message?.content?.toLowerCase() || "";
+        return t.includes("true");
     } catch {
         return true;
     }
 }
 
-// ==========================================
-// 4. MAIN HANDLER
-// ==========================================
+// ----------------------------
+// 4. OPTIONS
+// ----------------------------
 export async function onRequestOptions() {
     return new Response(null, { status: 204, headers: corsHeaders });
 }
 
+// ----------------------------
+// 5. MAIN HANDLER
+// ----------------------------
 export async function onRequestPost(context) {
     const { request, env } = context;
 
     try {
         const { modelName, messages } = await request.json();
 
+        // ========= MODEL CONFIG =========
         const apiConfig = {
-            'Mini': { key: env.MINI_API_KEY, model: 'kwaipilot/kat-coder-pro:free' },
-            'Smart': { key: env.SMART_API_KEY, model: 'amazon/nova-2-lite-v1:free' },
-            'Nerd': { key: env.NERD_API_KEY, model: 'x-ai/grok-4.1-fast:free' }
+            "Mini":  { key: env.MINI_API_KEY,  model: "kwaipilot/kat-coder-pro:free" },
+            "Smart": { key: env.SMART_API_KEY, model: "amazon/nova-2-lite-v1:free" },
+            "Nerd":  { key: env.NERD_API_KEY,  model: "x-ai/grok-4.1-fast:free" }
         };
+
         const config = apiConfig[modelName];
+        if (!config) {
+            return new Response(JSON.stringify({ error: "Invalid modelName" }), { status: 400 });
+        }
 
         const lastMsg = messages[messages.length - 1].content;
-        let injectionData = "";
-        let toolUsed = null;
+        let injected = "";
+        let toolUsed = "Internal Knowledge";
 
-        const shouldSearch = await decideToSearch(lastMsg, env.SEARCH_API_KEY);
+        // ========= DECIDE: NEED SEARCH OR NOT =========
+        const needSearch = await shouldSearchQuery(lastMsg, env.SEARCH_API_KEY);
 
-        if (shouldSearch) {
-            const ddgResults = await searchDuckDuckGo(lastMsg);
+        if (needSearch) {
+            const results = await webSearch(lastMsg);
 
-            if (ddgResults?.length > 0) {
-                const scrape = await Promise.all(
-                    ddgResults.slice(0, 2).map(async item => {
-                        const content = await scrapeContentFree(item.link);
-                        if (content) {
-                            return `TITLE: ${item.title}\nLINK: ${item.link}\nCONTENT: ${content}\n`;
-                        }
-                        return `TITLE: ${item.title}\nLINK: ${item.link}\nSUMMARY: ${item.snippet}\n`;
+            if (results && results.length > 0) {
+                toolUsed = "Web Search";
+
+                const scraped = await Promise.all(
+                    results.slice(0, 2).map(async (r) => {
+                        const content = await scrapePage(r.link);
+                        return {
+                            title: r.title,
+                            link: r.link,
+                            summary: r.snippet,
+                            content: content || null
+                        };
                     })
                 );
 
-                injectionData = `[LIVE WEB SEARCH RESULTS]\n${scrape.join("\n---\n")}\n`;
-                toolUsed = "Web Search (DDG + Native Scraper)";
+                injected += `[WEB SEARCH RESULTS]\n${JSON.stringify(scraped, null, 2)}\n\n`;
             } else {
                 toolUsed = "Web Search (No Results)";
             }
-        } else {
-            toolUsed = "Internal Knowledge";
         }
 
-        let finalMessages = [...messages];
+        // ========= BUILD FINAL PROMPT =========
+        const finalMessages = [...messages];
 
-        if (injectionData) {
+        if (injected) {
             finalMessages.push({
                 role: "system",
                 content: `
-CRITICAL: You are Oceep. You have NO real-world knowledge after 2023.
-Always rely on the [LIVE WEB SEARCH RESULTS] provided.
-Answer in Vietnamese.
-${injectionData}
-`
+You MUST use the following live web results to answer.
+If the info is missing, SAY YOU DON'T KNOW.
+Always answer in Vietnamese.
+
+${injected}
+                `
             });
         }
 
-        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
+        // ========= CALL OPENROUTER =========
+        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${config.key}`,
-                'HTTP-Referer': 'https://oceep.pages.dev/',
-                'X-Title': 'Oceep'
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${config.key}`,
+                "HTTP-Referer": "https://oceep.pages.dev/",
+                "X-Title": "Oceep"
             },
             body: JSON.stringify({
                 model: config.model,
@@ -207,14 +190,14 @@ ${injectionData}
         const data = await res.json();
 
         return new Response(JSON.stringify({
-            content: data?.choices?.[0]?.message?.content || "",
+            content: data.choices?.[0]?.message?.content || "",
             toolUsed
         }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
 
-    } catch (e) {
-        return new Response(JSON.stringify({ error: e.message }), {
+    } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), {
             status: 500,
             headers: corsHeaders
         });
