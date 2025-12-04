@@ -24,7 +24,7 @@ async function searchDuckDuckGo(query) {
         const html = await res.text();
         
         const results = [];
-        // Regex bóc tách kết quả (đã test kỹ)
+        // Regex bóc tách kết quả
         const regex = /<div class="result__body">[\s\S]*?<a class="result__a" href="([^"]+)">([\s\S]*?)<\/a>[\s\S]*?<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
         
         let match;
@@ -53,7 +53,7 @@ async function searchDuckDuckGo(query) {
 }
 
 // ==========================================
-// 2. TOOL: NATIVE SCRAPER (Đã Fix cú pháp)
+// 2. TOOL: NATIVE SCRAPER (Simplified Syntax)
 // ==========================================
 async function scrapeContentFree(url) {
     try {
@@ -70,22 +70,22 @@ async function scrapeContentFree(url) {
 
         if (!res.ok) return null;
 
-        let html = await res.text();
+        const rawHtml = await res.text();
 
-        // --- XỬ LÝ LÀM SẠCH HTML ---
-        // Thêm dấu chấm phẩy ; cuối mỗi dòng để tránh lỗi biên dịch
-        html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gmi, "");
-        html = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gmi, "");
-        html = html.replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gmi, "");
-        html = html.replace(/<footer\b[^>]*>[\s\S]*?<\/footer>/gmi, "");
-        html = html.replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gmi, "");
-        html = html.replace(//g, ""); // Dòng này quan trọng
+        // Sử dụng chaining (nối chuỗi) để tránh lỗi cú pháp
+        const cleanText = rawHtml
+            .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gmi, " ")
+            .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gmi, " ")
+            .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gmi, " ")
+            .replace(/<footer\b[^>]*>[\s\S]*?<\/footer>/gmi, " ")
+            .replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gmi, " ")
+            .replace(//g, " ")
+            .replace(/<[^>]+>/g, " ") // Xóa toàn bộ thẻ tag còn lại
+            .replace(/\s+/g, " ")     // Xóa khoảng trắng thừa
+            .trim()
+            .slice(0, 1500);          // Cắt ngắn
 
-        // Xóa tất cả thẻ HTML còn lại, chỉ giữ text
-        const text = html.replace(/<[^>]+>/g, " ");
-
-        // Xử lý khoảng trắng thừa và cắt ngắn
-        return text.replace(/\s+/g, " ").trim().slice(0, 1500);
+        return cleanText;
 
     } catch (e) {
         return null;
@@ -164,7 +164,6 @@ export async function onRequestPost(context) {
                     if (content && content.length > 100) {
                         return `TITLE: ${item.title}\nLINK: ${item.link}\nCONTENT: ${content}\n`;
                     }
-                    // Fallback dùng snippet nếu scrape lỗi
                     return `TITLE: ${item.title}\nLINK: ${item.link}\nSUMMARY: ${item.snippet}\n`;
                 });
 
