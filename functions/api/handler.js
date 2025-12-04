@@ -7,164 +7,83 @@ const corsHeaders = {
 };
 
 // ==========================================
-// 1. CÁC HÀM TOOLS (FREE & NO-BLOCK)
+// 1. TOOL: QWANT LITE SEARCH (HTML Lite)
 // ==========================================
-
-// --- Tool 1: Thời gian ---
-function getCurrentTime() {
-    const now = new Date();
-    const date = now.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
-    const time = now.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false });
-    return `${date} | ${time}`;
-}
-
-// --- Tool 2: SearXNG (Web Search miễn phí, trả về JSON) ---
-async function searchSearXNG(query) {
-    const startTime = Date.now();
-    
-    // Danh sách các Public Instances ổn định (Dự phòng nhau)
-    const instances = [
-        'https://searx.be', 
-        'https://search.ononoki.org',
-        'https://searx.ngn.tf'
-    ];
-
-    for (const host of instances) {
-        try {
-            // Gọi API JSON của SearXNG
-            const url = `${host}/search?q=${encodeURIComponent(query)}&format=json&categories=general&language=vi-VN`;
-            
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000); // Timeout 4s mỗi host
-
-            const res = await fetch(url, { 
-                signal: controller.signal,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                }
-            });
-            clearTimeout(timeoutId);
-
-            if (!res.ok) continue; // Thử host khác nếu lỗi
-
-            const data = await res.json();
-            if (!data.results || data.results.length === 0) continue;
-
-            // Xử lý kết quả
-            const endTime = Date.now();
-            const duration = ((endTime - startTime) / 1000).toFixed(2);
-            let resultText = `[WEB SEARCH RESULTS - SearXNG]\nQuery: "${query}"\n`;
-            resultText += `⏱️ (Đã tìm kiếm trong ${duration} giây)\n\n`;
-
-            // Lấy 5 kết quả đầu
-            data.results.slice(0, 5).forEach((item, index) => {
-                resultText += `${index + 1}. [${item.title}](${item.url})\n`;
-                const content = item.content || item.snippet || "";
-                resultText += `   > ${content.replace(/<\/?[^>]+(>|$)/g, "")}\n\n`; // Xóa HTML tags
-            });
-
-            return resultText; // Trả về ngay khi thành công
-
-        } catch (e) {
-            // Bỏ qua lỗi để thử host tiếp theo
-            console.error(`SearXNG error on ${host}:`, e);
-        }
-    }
-    return null; // Thất bại toàn tập
-}
-
-// --- Tool 3: Wikipedia API (Dự phòng cực mạnh cho định nghĩa/nhân vật) ---
-async function searchWikipedia(query) {
+async function searchQwantLite(query) {
     try {
-        const url = `https://vi.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&utf8=`;
-        const res = await fetch(url);
-        const data = await res.json();
-
-        if (!data.query || !data.query.search || data.query.search.length === 0) return null;
-
-        let resultText = `[WIKIPEDIA SEARCH RESULTS]\nQuery: "${query}"\n\n`;
-        
-        data.query.search.slice(0, 3).forEach((item, index) => {
-            // Clean HTML tags từ snippet của Wiki
-            const snippet = item.snippet.replace(/<[^>]*>?/gm, '');
-            resultText += `${index + 1}. [${item.title}](https://vi.wikipedia.org/wiki/${encodeURIComponent(item.title)})\n`;
-            resultText += `   > ${snippet}...\n\n`;
+        const url = `https://lite.qwant.com/?q=${encodeURIComponent(query)}&t=web`;
+        const res = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
         });
+        const html = await res.text();
 
-        return resultText;
-    } catch (e) { return null; }
-}
+        // Regex bắt link từ kết quả Qwant Lite
+        const linkPattern = /<a class="result__url" href="(http[^"]+)"/g;
+        let match;
+        const results = [];
+        let count = 0;
 
-// --- Tool 4: Thời tiết (Open-Meteo) ---
-async function getWeather(query) {
-    try {
-        let loc = query.replace(/(thời tiết|nhiệt độ|dự báo|tại|ở|hôm nay|thế nào|\?|thoi tiet|nhiet do|du bao|tai|o|hom nay|the nao)/gi, '').trim();
-        if (loc.length < 2) loc = "Hanoi";
-
-        const searchUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(loc)}&format=json&limit=1&accept-language=vi`;
-        const coordsRes = await fetch(searchUrl, { headers: { 'User-Agent': 'OceepAI/1.0' } });
-        const coordsData = await coordsRes.json();
-        
-        if (!coordsData || coordsData.length === 0) return null;
-        const { lat, lon, display_name } = coordsData[0];
-
-        const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&timezone=auto`;
-        const res = await fetch(weatherUrl);
-        const data = await res.json();
-        
-        if (!data || !data.current) return null;
-        const cur = data.current;
-        const wmo = { 0:"Nắng đẹp ☀️", 1:"Nhiều mây 🌤", 2:"Có mây ☁️", 3:"Âm u ☁️", 45:"Sương mù 🌫", 51:"Mưa nhỏ 🌧", 61:"Mưa 🌧", 63:"Mưa vừa 🌧", 80:"Mưa rào ⛈", 95:"Bão ⛈" };
-        const status = wmo[cur.weather_code] || "Có mây";
-
-        return `[REAL-TIME WEATHER DATA]
-- Location: ${display_name}
-- Status: ${status}
-- Temp: ${cur.temperature_2m}°C (Feels like: ${cur.apparent_temperature}°C)
-- Humidity: ${cur.relative_humidity_2m}%
-- Wind: ${cur.wind_speed_10m} km/h`;
-    } catch (e) { return null; }
-}
-
-// --- Tool 5: Binance Crypto Data ---
-async function getBinanceData(query) {
-    try {
-        let symbol = "BTCUSDT"; 
-        const q = query.toUpperCase();
-        
-        if (q.includes("ETH")) symbol = "ETHUSDT";
-        else if (q.includes("BNB")) symbol = "BNBUSDT";
-        else if (q.includes("SOL")) symbol = "SOLUSDT";
-        else if (q.includes("DOGE")) symbol = "DOGEUSDT";
-        else if (q.includes("ADA")) symbol = "ADAUSDT";
-        else if (q.includes("XRP")) symbol = "XRPUSDT";
-        else {
-             const potentialSymbol = q.match(/\b[A-Z]{3,4}\b/);
-             if (potentialSymbol) symbol = `${potentialSymbol[0]}USDT`;
+        while ((match = linkPattern.exec(html)) !== null && count < 3) { // Lấy top 3
+            const link = match[1];
+            if (!link.includes('qwant.com') && !link.includes('ad.')) {
+                results.push(link);
+                count++;
+            }
         }
-
-        const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
-        if (!res.ok) return null;
-
-        const data = await res.json();
-        
-        return `[BINANCE MARKET DATA - REALTIME]
-Symbol: ${data.symbol}
-Current Price: ${parseFloat(data.lastPrice).toLocaleString()} USDT
-Price Change (24h): ${parseFloat(data.priceChange).toLocaleString()} USDT
-Change Percent (24h): ${data.priceChangePercent}%
-High (24h): ${parseFloat(data.highPrice).toLocaleString()} USDT
-Low (24h): ${parseFloat(data.lowPrice).toLocaleString()} USDT
-Volume (24h): ${parseFloat(data.volume).toLocaleString()} ${symbol.replace('USDT','')}
-Time: ${new Date(data.closeTime).toLocaleString('vi-VN')}
-`;
-    } catch (e) { return null; }
+        return results.length > 0 ? results : null;
+    } catch (e) {
+        return null;
+    }
 }
 
 // ==========================================
-// 2. XỬ LÝ REQUEST
+// 2. TOOL: SCRAPE NINJA (Bypass Cloudflare)
 // ==========================================
+async function scrapeWithNinja(urls, rapidApiKey) {
+    if (!rapidApiKey || urls.length === 0) return "";
+    
+    // Giới hạn chạy tối đa 2 URL cùng lúc để tiết kiệm Credit ScrapeNinja
+    const selectedUrls = urls.slice(0, 2); 
 
+    const promises = selectedUrls.map(async (url) => {
+        try {
+            const response = await fetch('https://scrapeninja.p.rapidapi.com/scrape', {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/json',
+                    'X-RapidAPI-Key': rapidApiKey,
+                    'X-RapidAPI-Host': 'scrapeninja.p.rapidapi.com'
+                },
+                body: JSON.stringify({
+                    "url": url,
+                    "headers": ["User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/98.0.4758.102"],
+                    "render_js": false, 
+                    "text_content_only": true 
+                })
+            });
+
+            if (!response.ok) return null;
+            const data = await response.json();
+            
+            let content = data.body || "";
+            // Cắt gọn nội dung để không bị quá token input của AI
+            content = content.replace(/\s+/g, ' ').trim().slice(0, 2000);
+            
+            return `SOURCE: ${url}\nCONTENT: ${content}\n`;
+        } catch (e) {
+            return null;
+        }
+    });
+
+    const contents = await Promise.all(promises);
+    return contents.filter(c => c !== null).join("\n---\n");
+}
+
+// ==========================================
+// 3. MAIN HANDLER
+// ==========================================
 export async function onRequestOptions() {
     return new Response(null, { status: 204, headers: corsHeaders });
 }
@@ -175,126 +94,85 @@ export async function onRequestPost(context) {
     try {
         const { modelName, messages } = await request.json();
 
-        // --- CẤU HÌNH API KEYS ---
+        // Config API Keys
         const apiConfig = {
-            'Mini': { 
-                key: env.MINI_API_KEY, 
-                model: 'kwaipilot/kat-coder-pro:free' 
-            }, 
-            'Smart': { 
-                key: env.SMART_API_KEY, 
-                model: 'amazon/nova-2-lite-v1:free' 
-            },
-            'Nerd': { 
-                key: env.NERD_API_KEY, 
-                model: 'x-ai/grok-4.1-fast:free' 
-            }
+            'Mini': { key: env.MINI_API_KEY, model: 'kwaipilot/kat-coder-pro:free' }, 
+            'Smart': { key: env.SMART_API_KEY, model: 'amazon/nova-2-lite-v1:free' },
+            'Nerd': { key: env.NERD_API_KEY, model: 'x-ai/grok-4.1-fast:free' }
         };
-
         const config = apiConfig[modelName];
-        if (!config || !config.key) {
-            return new Response(JSON.stringify({ error: `Missing API Key for model ${modelName}` }), { status: 400, headers: corsHeaders });
-        }
 
         const lastMsgObj = messages[messages.length - 1];
         const lastMsg = lastMsgObj.content.toLowerCase();
         let injectionData = "";
         let toolUsed = null;
 
-        // --- PHÂN LOẠI TỪ KHÓA ---
-        const skipSearchKeywords = /(giải toán|code|lập trình|javascript|python|html|css|fix bug|lỗi|logic|ngữ pháp|tiếng anh|viết văn|viết mail|văn mẫu|kiến thức chung|trái đất|định nghĩa|khái niệm|công thức|tính toán|giai toan|lap trinh|ngu phap|viet van|van mau|kien thuc chung|dinh nghia|khai niem|cong thuc|tinh toan)/;
-        
-        const mustSearchKeywords = [
-            'địa chỉ', 'quán', 'nhà hàng', 'ở đâu', 'gần đây', 'đường nào', 'bản đồ', 
-            'dia chi', 'quan', 'nha hang', 'o dau', 'gan day', 'duong nao', 'ban do',
-            'thời tiết', 'hôm nay', 'ngày mai', 'nhiệt độ', 'mưa', 'nắng',
-            'thoi tiet', 'hom nay', 'ngay mai', 'nhiet do',
-            'tin tức', 'sự kiện', 'mới nhất', 'vừa xảy ra', 'biến động', 'là ai',
-            'tin tuc', 'su kien', 'moi nhat', 'vua xay ra', 'bien dong', 'la ai',
-            'giá', 'chi phí', 'bao nhiêu tiền', 'tỷ giá', 'vàng',
-            'gia', 'chi phi', 'bao nhieu tien', 'ty gia', 'vang',
-            'giờ mở cửa', 'tình trạng giao thông', 'kẹt xe', 'tắc đường',
-            'gio mo cua', 'giao thong', 'ket xe', 'tac duong',
-            'hiện tại', 'bây giờ', 'hien tai', 'bay gio', 'có quán nào', 'co quan nao',
-            'review', 'đánh giá', 'danh gia', 'tìm kiếm', 'search', 'tim kiem'
-        ];
+        // --- BỘ LỌC TỪ KHÓA MỚI (CẬP NHẬT) ---
 
-        const cryptoKeywords = /(crypto|coin|bitcoin|eth|bnb|usdt|token|thị trường ảo|thi truong ao|giá coin|gia coin)/;
+        // 1. Từ khóa BỎ QUA (Các tác vụ nội bộ: code, viết văn, dịch thuật...)
+        const skipSearchKeywords = /(giải toán|code|lập trình|javascript|css|html|fix bug|lỗi|logic|ngữ pháp|tiếng anh|dịch|translate|viết văn|viết mail|văn mẫu|kiến thức chung|định nghĩa|khái niệm|công thức|tính toán|giai toan|lap trinh|ngu phap|tieng anh|viet van|van mau|dinh nghia|khai niem|cong thuc|tinh toan)/;
+
+        // 2. Từ khóa BẮT BUỘC SEARCH (Bao gồm có dấu & không dấu)
+        // Nhóm: Địa điểm, Thời gian, Giá cả, Tin tức, Crypto, Profile, Hỏi đáp
+        const mustSearchKeywords = new RegExp([
+            // Địa điểm / Di chuyển
+            'địa chỉ', 'quán', 'nhà hàng', 'khách sạn', 'ở đâu', 'đường nào', 'bản đồ', 'vị trí', 'bao xa',
+            'dia chi', 'quan', 'nha hang', 'khach san', 'o dau', 'duong nao', 'ban do', 'vi tri', 'bao xa',
+            
+            // Thời tiết / Thời gian
+            'thời tiết', 'nhiệt độ', 'dự báo', 'mưa', 'nắng', 'hôm nay', 'ngày mai', 'tuần này', 'bây giờ',
+            'thoi tiet', 'nhiet do', 'du bao', 'mua', 'nang', 'hom nay', 'ngay mai', 'tuan nay', 'bay gio',
+            
+            // Tin tức / Sự kiện / Bóng đá
+            'tin tức', 'sự kiện', 'bóng đá', 'thể thao', 'lịch thi đấu', 'kết quả', 'mới nhất', 'vừa xong', 'biến động', 'hot',
+            'tin tuc', 'su kien', 'bong da', 'the thao', 'lich thi dau', 'ket qua', 'moi nhat', 'vua xong', 'bien dong',
+            
+            // Mua sắm / Giá cả / Review
+            'giá', 'bao nhiêu', 'tiền', 'tỷ giá', 'vàng', 'chứng khoán', 'cổ phiếu', 'lãi suất', 'review', 'đánh giá', 'so sánh', 'top',
+            'gia', 'bao nhieu', 'tien', 'ty gia', 'vang', 'chung khoan', 'co phieu', 'lai suat', 'danh gia', 'so sanh',
+            
+            // Profile / Thông tin / Là ai
+            'là ai', 'là gì', 'tiểu sử', 'thông tin', 'profile', 'scandal', 'drama', 'nguồn gốc',
+            'la ai', 'la gi', 'tieu su', 'thong tin', 'nguon goc',
+            
+            // Crypto / Tech
+            'crypto', 'coin', 'token', 'btc', 'eth', 'sol', 'iphone', 'samsung', 'công nghệ', 'cong nghe',
+            
+            // Lệnh tìm kiếm trực tiếp
+            'tìm kiếm', 'tra cứu', 'search', 'google', 'tim kiem', 'tra cuu'
+        ].join('|'), 'i'); // 'i' flag để không phân biệt hoa thường
 
         const shouldSkipSearch = skipSearchKeywords.test(lastMsg);
-        const isMustSearch = mustSearchKeywords.some(kw => lastMsg.includes(kw));
-        const isCryptoQuery = cryptoKeywords.test(lastMsg);
+        const isMustSearch = mustSearchKeywords.test(lastMsg);
 
-        if (!shouldSkipSearch) {
+        // Logic kích hoạt: 
+        // 1. Không nằm trong danh sách cấm
+        // 2. VÀ (Có từ khóa search HOẶC câu hỏi dài > 10 ký tự)
+        if (!shouldSkipSearch && (isMustSearch || lastMsg.length > 10)) {
             
-            // 1. Time Check
-            if (lastMsg.match(/(giờ|ngày|hôm nay|thứ mấy|bây giờ|gio|ngay|hom nay|thu may|bay gio)/)) {
-                injectionData += `SYSTEM TIME: ${getCurrentTime()}\n\n`;
-                toolUsed = "Time";
-            }
+            // [STEP 1] Qwant Lite Search
+            const urls = await searchQwantLite(lastMsg);
 
-            // 2. Weather Check
-            if (lastMsg.match(/(thời tiết|nhiệt độ|mưa|nắng|thoi tiet|nhiet do|mua|nang)/)) {
-                const weatherData = await getWeather(lastMsg);
-                if (weatherData) injectionData += weatherData + "\n\n";
-            }
-
-            // 3. Binance Crypto Check
-            if (isCryptoQuery) {
-                const binanceData = await getBinanceData(lastMsg);
-                if (binanceData) {
-                    injectionData += binanceData + "\n\n";
-                    toolUsed = "Binance API";
-                }
-            }
-
-            // 4. Web Search (SearXNG -> Fallback Wikipedia)
-            // Logic: Nếu chưa dùng Crypto/Weather thì mới Search Web
-            if ((isMustSearch || lastMsg.length > 15) && !toolUsed) {
-                // Thử SearXNG trước (General Search)
-                const searchData = await searchSearXNG(lastMsg);
-                if (searchData) {
-                    injectionData += searchData + "\n\n";
-                    toolUsed = "Web Search (SearXNG)";
-                } 
-                // Nếu SearXNG tạch (hoặc trả về rỗng), thử tiếp Wikipedia (tốt cho định nghĩa/người)
-                else {
-                    const wikiData = await searchWikipedia(lastMsg);
-                    if (wikiData) {
-                        injectionData += wikiData + "\n\n";
-                        toolUsed = "Wikipedia Search";
-                    } else {
-                         // Nếu cả 2 đều không được
-                         injectionData += "[SYSTEM NOTE: Attempted to search web but external search providers are busy/blocking. Answer based on internal knowledge if possible.]\n";
-                    }
+            if (urls && urls.length > 0) {
+                // [STEP 2] ScrapeNinja Render
+                const scrapedContent = await scrapeWithNinja(urls, env.RAPIDAPI_KEY);
+                
+                if (scrapedContent) {
+                    injectionData += `[SEARCH CONTEXT FROM WEB]\n${scrapedContent}\n\n`;
+                    toolUsed = "Web Search (Qwant+Ninja)";
                 }
             }
         }
 
         let finalMessages = [...messages];
-
         if (injectionData) {
-            const systemPrompt = `
-You are Oceep, an intelligent AI assistant.
-You have access to real-time tools. Below is the data retrieved for this request:
-
-=== START OF REAL-TIME DATA ===
-${injectionData}
-=== END OF REAL-TIME DATA ===
-
-INSTRUCTIONS:
-1. **Search Results:** Use the provided search results to answer accurately. 
-   - If results are from SearXNG/Google, include the provided search duration in your response.
-   - If results are from Wikipedia, summarize the key points.
-2. **Crypto Data:** If data is from Binance, **OUTPUT A MARKDOWN TABLE**.
-3. **No Refusal:** Do not complain about internet access. Use the provided data.
-4. **Language:** Answer in Vietnamese.
-`;
-            finalMessages.push({ role: "system", content: systemPrompt });
-        } else if (shouldSkipSearch) {
-            finalMessages.push({ role: "system", content: "Task requires internal knowledge. Do NOT hallucinate real-time facts." });
+            finalMessages.push({ 
+                role: "system", 
+                content: `You are Oceep. Use the following REAL-TIME web content to answer:\n\n${injectionData}\n\nAnswer in Vietnamese.` 
+            });
         }
 
+        // Call LLM
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -307,16 +185,11 @@ INSTRUCTIONS:
                 model: config.model,
                 messages: finalMessages,
                 stream: false, 
-                max_tokens: 2500,
+                max_tokens: 2500, 
                 temperature: 0.5 
             }),
         });
 
-        if (!res.ok) {
-            const txt = await res.text();
-            return new Response(JSON.stringify({ error: txt }), { status: res.status, headers: corsHeaders });
-        }
-        
         const data = await res.json();
         return new Response(JSON.stringify({ 
             content: data.choices?.[0]?.message?.content || "",
@@ -326,6 +199,6 @@ INSTRUCTIONS:
         });
 
     } catch (e) {
-        return new Response(JSON.stringify({ error: `System Error: ${e.message}` }), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: corsHeaders });
     }
 }
