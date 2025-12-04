@@ -7,12 +7,11 @@ const corsHeaders = {
 };
 
 // ==========================================
-// 1. TOOL: AI DECISION MAKER (Hidden Thought)
+// 1. TOOL: AI DECISION MAKER (Aggressive Mode)
 // ==========================================
 async function decideToSearch(query, apiKey) {
-    // Nếu chưa cấu hình Key này thì mặc định luôn Search để tránh lỗi
     if (!apiKey) {
-        console.warn("Missing SEARCH_API_KEY, defaulting to TRUE");
+        // Nếu không có key, mặc định SEARCH luôn cho chắc
         return true; 
     }
 
@@ -21,18 +20,25 @@ async function decideToSearch(query, apiKey) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`, // Dùng SEARCH_API_KEY riêng biệt
+                'Authorization': `Bearer ${apiKey}`,
                 'HTTP-Referer': 'https://oceep.pages.dev/',
-                'X-Title': 'Oceep Hidden Classifier'
+                'X-Title': 'Oceep Classifier'
             },
             body: JSON.stringify({
                 model: 'arcee-ai/trinity-mini:free', 
                 messages: [
                     {
                         role: "system",
-                        content: `Analyze the user query. Does it require external real-time information (news, weather, stock prices, facts about specific people/events) to answer correctly?
-- Reply "true" if YES.
-- Reply "false" if NO (e.g. coding, math, greetings, translation, creative writing).
+                        // Prompt này ép AI phải "nghi ngờ" kiến thức của chính nó
+                        content: `You are a search decision engine.
+Analyze the user query. Does it involve:
+1. Recent events, news, or weather?
+2. Prices, products, or stock markets?
+3. Specific facts about people, places, or technology?
+4. Anything that might have changed since 2023?
+
+If ANY of the above is YES, output "true".
+Only output "false" for generic greetings, simple math, code, or translations.
 Output ONLY "true" or "false".`
                     },
                     { role: "user", content: query }
@@ -45,11 +51,12 @@ Output ONLY "true" or "false".`
         const data = await response.json();
         const decision = data.choices?.[0]?.message?.content?.trim().toLowerCase() || "true";
         
-        // Chỉ trả về True/False, người dùng không hề biết bước này diễn ra
+        console.log(`[Decision] Query: "${query}" -> Need Search? ${decision}`);
+        
         return decision.includes("true");
     } catch (e) {
-        console.error("Decision Error:", e);
-        return true; // Fallback an toàn
+        console.error("Decision Error, defaulting to TRUE:", e);
+        return true; // Thà search thừa còn hơn bỏ sót
     }
 }
 
@@ -61,10 +68,13 @@ async function searchQwantLite(query) {
         const url = `https://lite.qwant.com/?q=${encodeURIComponent(query)}&t=web`;
         const res = await fetch(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                // User-Agent mới nhất để tránh bị chặn
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
             }
         });
         const html = await res.text();
+        
+        // Regex bắt link (chặt chẽ hơn)
         const linkPattern = /<a class="result__url" href="(http[^"]+)"/g;
         let match;
         const results = [];
@@ -72,7 +82,8 @@ async function searchQwantLite(query) {
 
         while ((match = linkPattern.exec(html)) !== null && count < 3) { 
             const link = match[1];
-            if (!link.includes('qwant.com') && !link.includes('ad.') && !link.includes('javascript:')) {
+            // Lọc kỹ rác
+            if (!link.includes('qwant.com') && !link.includes('ad.') && !link.includes('javascript:') && !link.startsWith('/')) {
                 results.push(link);
                 count++;
             }
@@ -98,7 +109,7 @@ async function scrapeWithNinja(urls, rapidApiKey) {
                 },
                 body: JSON.stringify({
                     "url": url,
-                    "headers": ["User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/98.0.4758.102"],
+                    "headers": ["User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"],
                     "render_js": false, 
                     "text_content_only": true 
                 })
@@ -106,7 +117,8 @@ async function scrapeWithNinja(urls, rapidApiKey) {
             if (!response.ok) return null;
             const data = await response.json();
             let content = data.body || "";
-            content = content.replace(/\s+/g, ' ').trim().slice(0, 1500);
+            // Tăng giới hạn đọc lên 2000 ký tự để AI có nhiều context hơn
+            content = content.replace(/\s+/g, ' ').trim().slice(0, 2000);
             if (content.length < 50) return null;
             return `SOURCE: ${url}\nCONTENT: ${content}\n`;
         } catch (e) { return null; }
@@ -128,9 +140,9 @@ export async function onRequestPost(context) {
     try {
         const { modelName, messages } = await request.json();
 
-        // Config API Keys cho Model chính
+        // Config API Keys
         const apiConfig = {
-            'Mini': { key: env.MINI_API_KEY, model: 'meta-llama/llama-3.3-70b-instruct:free' }, 
+            'Mini': { key: env.MINI_API_KEY, model: 'kwaipilot/kat-coder-pro:free' }, 
             'Smart': { key: env.SMART_API_KEY, model: 'amazon/nova-2-lite-v1:free' },
             'Nerd': { key: env.NERD_API_KEY, model: 'x-ai/grok-4.1-fast:free' }
         };
@@ -141,20 +153,24 @@ export async function onRequestPost(context) {
         let injectionData = "";
         let toolUsed = null;
 
-        // [BƯỚC 1]: Suy nghĩ trong "tri thức ẩn" (Hidden Thought)
-        // Sử dụng SEARCH_API_KEY riêng biệt
+        // [BƯỚC 1]: Hỏi AI Classifier (Với prompt "Aggressive")
         const shouldSearch = await decideToSearch(lastMsg, env.SEARCH_API_KEY);
 
         if (shouldSearch) {
-            // [BƯỚC 2]: Qwant Search
+            // [BƯỚC 2]: Tìm kiếm
             const urls = await searchQwantLite(lastMsg);
 
             if (urls && urls.length > 0) {
-                // [BƯỚC 3]: ScrapeNinja đọc nội dung
+                // [BƯỚC 3]: Đọc nội dung
                 const scrapedContent = await scrapeWithNinja(urls, env.RAPIDAPI_KEY);
                 
                 if (scrapedContent) {
-                    injectionData += `[REAL-TIME SEARCH RESULTS]\n${scrapedContent}\n\n`;
+                    injectionData += `
+=== REAL-TIME SEARCH RESULTS (IGNORE INTERNAL KNOWLEDGE) ===
+The following information comes from live web searches performed just now.
+${scrapedContent}
+============================================================
+`;
                     toolUsed = "Smart Search (Active)";
                 } else {
                     toolUsed = "Smart Search (Source Protected)";
@@ -163,21 +179,22 @@ export async function onRequestPost(context) {
                 toolUsed = "Smart Search (No Results)";
             }
         } else {
-            // Nếu AI "nhỏ" bảo không cần search, AI chính sẽ trả lời bằng kiến thức nội tại
             toolUsed = "Internal Knowledge"; 
         }
 
         let finalMessages = [...messages];
         if (injectionData) {
+            // System Prompt này cực gắt để "tẩy não" AI quên kiến thức cũ
             finalMessages.push({ 
                 role: "system", 
                 content: `
-You are Oceep. You MUST prioritize the following SEARCH RESULTS to answer the user's request.
-Cite the SOURCE url when using external info.
-
-${injectionData}
-
-Answer in Vietnamese.` 
+CRITICAL INSTRUCTION:
+You are Oceep. You have NO internal knowledge of events, prices, or facts after 2023.
+You MUST rely ENTIRELY on the provided "REAL-TIME SEARCH RESULTS" above to answer.
+- If the search results contradict what you "know", TRUST THE SEARCH RESULTS.
+- Cite the [SOURCE: url] for every fact you state.
+- Answer in Vietnamese.
+` 
             });
         }
 
@@ -194,7 +211,7 @@ Answer in Vietnamese.`
                 messages: finalMessages,
                 stream: false, 
                 max_tokens: 2500, 
-                temperature: 0.5 
+                temperature: 0.3 // Giảm nhiệt độ để AI bớt "sáng tạo" và bám sát context hơn
             }),
         });
 
