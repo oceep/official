@@ -24,7 +24,6 @@ async function searchDuckDuckGo(query) {
         const html = await res.text();
         
         const results = [];
-        // Regex bóc tách kết quả
         const regex = /<div class="result__body">[\s\S]*?<a class="result__a" href="([^"]+)">([\s\S]*?)<\/a>[\s\S]*?<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
         
         let match;
@@ -47,18 +46,17 @@ async function searchDuckDuckGo(query) {
 
         return results.length > 0 ? results : null;
     } catch (e) {
-        console.error("DDG Error:", e);
         return null;
     }
 }
 
 // ==========================================
-// 2. TOOL: NATIVE SCRAPER (Simplified Syntax)
+// 2. TOOL: NATIVE SCRAPER (FIXED: NO CHAINING)
 // ==========================================
 async function scrapeContentFree(url) {
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 4000); 
 
         const res = await fetch(url, { 
             signal: controller.signal,
@@ -70,22 +68,24 @@ async function scrapeContentFree(url) {
 
         if (!res.ok) return null;
 
-        const rawHtml = await res.text();
+        let html = await res.text();
 
-        // Sử dụng chaining (nối chuỗi) để tránh lỗi cú pháp
-        const cleanText = rawHtml
-            .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gmi, " ")
-            .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gmi, " ")
-            .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gmi, " ")
-            .replace(/<footer\b[^>]*>[\s\S]*?<\/footer>/gmi, " ")
-            .replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gmi, " ")
-            .replace(//g, " ")
-            .replace(/<[^>]+>/g, " ") // Xóa toàn bộ thẻ tag còn lại
-            .replace(/\s+/g, " ")     // Xóa khoảng trắng thừa
-            .trim()
-            .slice(0, 1500);          // Cắt ngắn
+        // --- XỬ LÝ LÀM SẠCH HTML (Viết tách dòng để tránh lỗi cú pháp) ---
+        html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gmi, " ");
+        html = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gmi, " ");
+        html = html.replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gmi, " ");
+        html = html.replace(/<footer\b[^>]*>[\s\S]*?<\/footer>/gmi, " ");
+        html = html.replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gmi, " ");
+        html = html.replace(//g, " ");
+        
+        // Xóa toàn bộ thẻ tag còn lại
+        html = html.replace(/<[^>]+>/g, " ");
+        
+        // Xóa khoảng trắng thừa
+        html = html.replace(/\s+/g, " ").trim();
 
-        return cleanText;
+        // Cắt ngắn nội dung
+        return html.slice(0, 1500);
 
     } catch (e) {
         return null;
@@ -158,7 +158,6 @@ export async function onRequestPost(context) {
             const ddgResults = await searchDuckDuckGo(lastMsg);
 
             if (ddgResults && ddgResults.length > 0) {
-                // Scrape song song 2 link đầu tiên
                 const scrapePromises = ddgResults.slice(0, 2).map(async (item) => {
                     const content = await scrapeContentFree(item.link);
                     if (content && content.length > 100) {
