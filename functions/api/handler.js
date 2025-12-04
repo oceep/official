@@ -130,7 +130,7 @@ export async function onRequestPost(context) {
 
         // Config API Keys cho Model chính
         const apiConfig = {
-            'Mini': { key: env.MINI_API_KEY, model: 'kwaipilot/kat-coder-pro:free' }, 
+            'Mini': { key: env.MINI_API_KEY, model: 'allenai/olmo-3-32b-think:free' }, 
             'Smart': { key: env.SMART_API_KEY, model: 'amazon/nova-2-lite-v1:free' },
             'Nerd': { key: env.NERD_API_KEY, model: 'x-ai/grok-4.1-fast:free' }
         };
