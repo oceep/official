@@ -24,6 +24,7 @@ async function searchDuckDuckGo(query) {
         const html = await res.text();
         
         const results = [];
+        // Regex bóc tách kết quả
         const regex = /<div class="result__body">[\s\S]*?<a class="result__a" href="([^"]+)">([\s\S]*?)<\/a>[\s\S]*?<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
         
         let match;
@@ -35,28 +36,33 @@ async function searchDuckDuckGo(query) {
             let snippet = match[3].replace(/<[^>]*>/g, '').trim();
 
             if (link.startsWith('//duckduckgo.com/l/?uddg=')) {
-                link = decodeURIComponent(link.split('uddg=')[1].split('&')[0]);
+                // Giải mã link redirect của DDG
+                const parts = link.split('uddg=');
+                if (parts.length > 1) {
+                    link = decodeURIComponent(parts[1].split('&')[0]);
+                }
             }
 
             if (link && !link.includes('ad_provider')) {
-                results.push({ link, title, snippet });
+                results.push({ link: link, title: title, snippet: snippet });
                 count++;
             }
         }
 
         return results.length > 0 ? results : null;
     } catch (e) {
+        // Fallback im lặng nếu lỗi
         return null;
     }
 }
 
 // ==========================================
-// 2. TOOL: NATIVE SCRAPER (FIXED: NO CHAINING)
+// 2. TOOL: NATIVE SCRAPER (Cú pháp an toàn tuyệt đối)
 // ==========================================
 async function scrapeContentFree(url) {
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000); 
+        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout
 
         const res = await fetch(url, { 
             signal: controller.signal,
@@ -70,7 +76,8 @@ async function scrapeContentFree(url) {
 
         let html = await res.text();
 
-        // --- XỬ LÝ LÀM SẠCH HTML (Viết tách dòng để tránh lỗi cú pháp) ---
+        // --- XỬ LÝ LÀM SẠCH HTML (Dạng gán từng dòng - Không dùng nối chuỗi) ---
+        // Thay thế từng thành phần rác bằng khoảng trắng
         html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gmi, " ");
         html = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gmi, " ");
         html = html.replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gmi, " ");
@@ -78,14 +85,16 @@ async function scrapeContentFree(url) {
         html = html.replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gmi, " ");
         html = html.replace(//g, " ");
         
-        // Xóa toàn bộ thẻ tag còn lại
+        // Xóa toàn bộ thẻ tag còn lại (ví dụ <div...>, <span...>)
         html = html.replace(/<[^>]+>/g, " ");
         
-        // Xóa khoảng trắng thừa
-        html = html.replace(/\s+/g, " ").trim();
+        // Xóa khoảng trắng thừa (nhiều dấu cách thành 1 dấu cách)
+        html = html.replace(/\s+/g, " ");
+        
+        // Cắt gọn string
+        const cleanText = html.trim().slice(0, 1500);
 
-        // Cắt ngắn nội dung
-        return html.slice(0, 1500);
+        return cleanText;
 
     } catch (e) {
         return null;
@@ -96,7 +105,8 @@ async function scrapeContentFree(url) {
 // 3. TOOL: AI DECISION MAKER
 // ==========================================
 async function decideToSearch(query, apiKey) {
-    if (!apiKey) return true; 
+    if (!apiKey) return true; // Mặc định true nếu thiếu key
+    
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -111,20 +121,22 @@ async function decideToSearch(query, apiKey) {
                 messages: [
                     {
                         role: "system",
-                        content: `Does the query need real-time external info (news, facts, prices, weather)? 
-Reply "true" if YES.
-Reply "false" if NO (greeting, math, code, translation).
-Output ONLY "true" or "false".`
+                        content: "Does the user query need real-time external info (news, facts, prices, weather)? Reply 'true' if YES. Reply 'false' if NO. Output ONLY 'true' or 'false'."
                     },
                     { role: "user", content: query }
                 ],
-                max_tokens: 5, temperature: 0
+                max_tokens: 5,
+                temperature: 0
             })
         });
+        
         const data = await response.json();
         const decision = data.choices?.[0]?.message?.content?.toLowerCase() || "true";
         return decision.includes("true");
-    } catch (e) { return true; }
+
+    } catch (e) {
+        return true; // Lỗi AI phân loại -> Default Search
+    }
 }
 
 // ==========================================
@@ -152,17 +164,24 @@ export async function onRequestPost(context) {
         let injectionData = "";
         let toolUsed = null;
 
+        // [STEP 1] AI Quyết định
         const shouldSearch = await decideToSearch(lastMsg, env.SEARCH_API_KEY);
 
         if (shouldSearch) {
+            // [STEP 2] Search DuckDuckGo
             const ddgResults = await searchDuckDuckGo(lastMsg);
 
             if (ddgResults && ddgResults.length > 0) {
-                const scrapePromises = ddgResults.slice(0, 2).map(async (item) => {
+                // [STEP 3] Scrape Content
+                // Chỉ lấy 2 link đầu tiên
+                const linksToScrape = ddgResults.slice(0, 2);
+                
+                const scrapePromises = linksToScrape.map(async (item) => {
                     const content = await scrapeContentFree(item.link);
                     if (content && content.length > 100) {
                         return `TITLE: ${item.title}\nLINK: ${item.link}\nCONTENT: ${content}\n`;
                     }
+                    // Fallback dùng snippet nếu scrape lỗi hoặc nội dung quá ngắn
                     return `TITLE: ${item.title}\nLINK: ${item.link}\nSUMMARY: ${item.snippet}\n`;
                 });
 
@@ -182,6 +201,7 @@ export async function onRequestPost(context) {
             toolUsed = "Internal Knowledge";
         }
 
+        // [STEP 4] Chuẩn bị prompt cuối cùng
         let finalMessages = [...messages];
         if (injectionData) {
             finalMessages.push({ 
@@ -195,6 +215,7 @@ ${injectionData}`
             });
         }
 
+        // [STEP 5] Gọi Model chính
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
