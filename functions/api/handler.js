@@ -7,14 +7,108 @@ const corsHeaders = {
 };
 
 // ==========================================
-// 1. TOOL: AI DECISION MAKER (Aggressive Mode)
+// 1. TOOL: DUCKDUCKGO SEARCH (HTML Version)
+// ==========================================
+async function searchDuckDuckGo(query) {
+    try {
+        // Sử dụng DuckDuckGo HTML vì nó nhẹ và dễ cào hơn bản JS
+        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+        
+        const res = await fetch(url, {
+            headers: {
+                // Giả lập trình duyệt thật để không bị DDG chặn
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+            }
+        });
+        
+        const html = await res.text();
+        
+        // Dùng Regex để bóc tách kết quả từ HTML của DDG
+        // Cấu trúc DDG HTML: <a class="result__a" href="...">Title</a> ... <a class="result__snippet" ...>Snippet</a>
+        const results = [];
+        const regex = /<div class="result__body">[\s\S]*?<a class="result__a" href="([^"]+)">([\s\S]*?)<\/a>[\s\S]*?<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+        
+        let match;
+        let count = 0;
+        
+        while ((match = regex.exec(html)) !== null && count < 3) {
+            let link = match[1];
+            let title = match[2].replace(/<[^>]*>/g, '').trim(); // Xóa thẻ HTML trong title
+            let snippet = match[3].replace(/<[^>]*>/g, '').trim(); // Xóa thẻ HTML trong snippet
+
+            // Giải mã URL của DDG (DDG thường mã hóa link gốc)
+            if (link.startsWith('//duckduckgo.com/l/?uddg=')) {
+                link = decodeURIComponent(link.split('uddg=')[1].split('&')[0]);
+            }
+
+            if (link && !link.includes('ad_provider')) {
+                results.push({ link, title, snippet });
+                count++;
+            }
+        }
+
+        return results.length > 0 ? results : null;
+    } catch (e) {
+        console.error("DDG Error:", e);
+        return null;
+    }
+}
+
+// ==========================================
+// 2. TOOL: NATIVE SCRAPER (Mã nguồn mở tự chế)
+// ==========================================
+// Hàm này thay thế hoàn toàn ScrapeNinja
+async function scrapeContentFree(url) {
+    try {
+        // Tự fetch trang đích
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000); // Timeout 4s
+
+        const res = await fetch(url, { 
+            signal: controller.signal,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+        });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) return null; // Nếu trang chặn hoặc lỗi 403/404
+
+        let html = await res.text();
+
+        // --- XỬ LÝ LÀM SẠCH HTML (LOGIC SCRAPER) ---
+        
+        // 1. Xóa các thẻ không cần thiết (Script, Style, SVG, Image, Header, Footer)
+        html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gmi, "");
+        html = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gmi, "");
+        html = html.replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gmi, "");
+        html = html.replace(/<footer\b[^>]*>[\s\S]*?<\/footer>/gmi, "");
+        html = html.replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gmi, "");
+        
+        // 2. Xóa comment HTML
+        html = html.replace(//g, "");
+
+        // 3. Xóa tất cả thẻ HTML còn lại, chỉ giữ text
+        let text = html.replace(/<[^>]+>/g, " ");
+
+        // 4. Xử lý khoảng trắng thừa
+        text = text.replace(/\s+/g, " ").trim();
+
+        // 5. Cắt ngắn nội dung (lấy 1500 ký tự đầu tiên quan trọng nhất)
+        return text.slice(0, 1500);
+
+    } catch (e) {
+        return null; // Lỗi fetch (do web chặn Cloudflare hoặc timeout)
+    }
+}
+
+// ==========================================
+// 3. TOOL: AI DECISION MAKER
 // ==========================================
 async function decideToSearch(query, apiKey) {
-    if (!apiKey) {
-        // Nếu không có key, mặc định SEARCH luôn cho chắc
-        return true; 
-    }
-
+    if (!apiKey) return true; // Mặc định search nếu thiếu key
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -25,106 +119,24 @@ async function decideToSearch(query, apiKey) {
                 'X-Title': 'Oceep Classifier'
             },
             body: JSON.stringify({
-                model: 'arcee-ai/trinity-mini:free', 
+                model: 'arcee-ai/trinity-mini:free',
                 messages: [
                     {
                         role: "system",
-                        // Prompt này ép AI phải "nghi ngờ" kiến thức của chính nó
-                        content: `You are a search decision engine.
-Analyze the user query. Does it involve:
-1. Recent events, news, or weather?
-2. Prices, products, or stock markets?
-3. Specific facts about people, places, or technology?
-4. Anything that might have changed since 2023?
-
-If ANY of the above is YES, output "true".
-Only output "false" for generic greetings, simple math, code, or translations.
+                        content: `Does the query need real-time external info (news, facts, prices, weather)? 
+Reply "true" if YES.
+Reply "false" if NO (greeting, math, code, translation).
 Output ONLY "true" or "false".`
                     },
                     { role: "user", content: query }
                 ],
-                max_tokens: 5, 
-                temperature: 0
+                max_tokens: 5, temperature: 0
             })
         });
-
         const data = await response.json();
-        const decision = data.choices?.[0]?.message?.content?.trim().toLowerCase() || "true";
-        
-        console.log(`[Decision] Query: "${query}" -> Need Search? ${decision}`);
-        
+        const decision = data.choices?.[0]?.message?.content?.toLowerCase() || "true";
         return decision.includes("true");
-    } catch (e) {
-        console.error("Decision Error, defaulting to TRUE:", e);
-        return true; // Thà search thừa còn hơn bỏ sót
-    }
-}
-
-// ==========================================
-// 2. TOOL: QWANT LITE SEARCH
-// ==========================================
-async function searchQwantLite(query) {
-    try {
-        const url = `https://lite.qwant.com/?q=${encodeURIComponent(query)}&t=web`;
-        const res = await fetch(url, {
-            headers: {
-                // User-Agent mới nhất để tránh bị chặn
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-            }
-        });
-        const html = await res.text();
-        
-        // Regex bắt link (chặt chẽ hơn)
-        const linkPattern = /<a class="result__url" href="(http[^"]+)"/g;
-        let match;
-        const results = [];
-        let count = 0;
-
-        while ((match = linkPattern.exec(html)) !== null && count < 3) { 
-            const link = match[1];
-            // Lọc kỹ rác
-            if (!link.includes('qwant.com') && !link.includes('ad.') && !link.includes('javascript:') && !link.startsWith('/')) {
-                results.push(link);
-                count++;
-            }
-        }
-        return results.length > 0 ? results : null;
-    } catch (e) { return null; }
-}
-
-// ==========================================
-// 3. TOOL: SCRAPE NINJA
-// ==========================================
-async function scrapeWithNinja(urls, rapidApiKey) {
-    if (!rapidApiKey || urls.length === 0) return "";
-    const selectedUrls = urls.slice(0, 2); 
-    const promises = selectedUrls.map(async (url) => {
-        try {
-            const response = await fetch('https://scrapeninja.p.rapidapi.com/scrape', {
-                method: 'POST',
-                headers: {
-                    'content-type': 'application/json',
-                    'X-RapidAPI-Key': rapidApiKey,
-                    'X-RapidAPI-Host': 'scrapeninja.p.rapidapi.com'
-                },
-                body: JSON.stringify({
-                    "url": url,
-                    "headers": ["User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"],
-                    "render_js": false, 
-                    "text_content_only": true 
-                })
-            });
-            if (!response.ok) return null;
-            const data = await response.json();
-            let content = data.body || "";
-            // Tăng giới hạn đọc lên 2000 ký tự để AI có nhiều context hơn
-            content = content.replace(/\s+/g, ' ').trim().slice(0, 2000);
-            if (content.length < 50) return null;
-            return `SOURCE: ${url}\nCONTENT: ${content}\n`;
-        } catch (e) { return null; }
-    });
-    const contents = await Promise.all(promises);
-    return contents.filter(c => c !== null).join("\n---\n");
+    } catch (e) { return true; }
 }
 
 // ==========================================
@@ -139,7 +151,7 @@ export async function onRequestPost(context) {
 
     try {
         const { modelName, messages } = await request.json();
-
+        
         // Config API Keys
         const apiConfig = {
             'Mini': { key: env.MINI_API_KEY, model: 'kwaipilot/kat-coder-pro:free' }, 
@@ -149,52 +161,56 @@ export async function onRequestPost(context) {
         const config = apiConfig[modelName];
 
         const lastMsgObj = messages[messages.length - 1];
-        const lastMsg = lastMsgObj.content; 
+        const lastMsg = lastMsgObj.content;
         let injectionData = "";
         let toolUsed = null;
 
-        // [BƯỚC 1]: Hỏi AI Classifier (Với prompt "Aggressive")
+        // [BƯỚC 1]: AI Quyết định (Dùng SEARCH_API_KEY)
         const shouldSearch = await decideToSearch(lastMsg, env.SEARCH_API_KEY);
 
         if (shouldSearch) {
-            // [BƯỚC 2]: Tìm kiếm
-            const urls = await searchQwantLite(lastMsg);
+            // [BƯỚC 2]: Search DuckDuckGo HTML
+            const ddgResults = await searchDuckDuckGo(lastMsg);
 
-            if (urls && urls.length > 0) {
-                // [BƯỚC 3]: Đọc nội dung
-                const scrapedContent = await scrapeWithNinja(urls, env.RAPIDAPI_KEY);
-                
-                if (scrapedContent) {
-                    injectionData += `
-=== REAL-TIME SEARCH RESULTS (IGNORE INTERNAL KNOWLEDGE) ===
-The following information comes from live web searches performed just now.
-${scrapedContent}
-============================================================
-`;
-                    toolUsed = "Smart Search (Active)";
+            if (ddgResults && ddgResults.length > 0) {
+                // [BƯỚC 3]: Dùng Native Scraper đọc nội dung từng link
+                // Chỉ đọc tối đa 2 link đầu tiên để tối ưu tốc độ
+                const scrapePromises = ddgResults.slice(0, 2).map(async (item) => {
+                    const content = await scrapeContentFree(item.link);
+                    if (content && content.length > 100) {
+                        return `TITLE: ${item.title}\nLINK: ${item.link}\nCONTENT: ${content}\n`;
+                    }
+                    // Fallback: Nếu không scrape được (do chặn), dùng Snippet của DDG
+                    return `TITLE: ${item.title}\nLINK: ${item.link}\nSUMMARY: ${item.snippet}\n`;
+                });
+
+                const scrapedData = await Promise.all(scrapePromises);
+                const validData = scrapedData.join("\n---\n");
+
+                if (validData) {
+                    injectionData = `[LIVE WEB SEARCH RESULTS - DUCKDUCKGO]\n${validData}\n\n`;
+                    toolUsed = "Web Search (DDG + Native Scraper)";
                 } else {
-                    toolUsed = "Smart Search (Source Protected)";
+                    toolUsed = "Web Search (Snippet Only)";
                 }
             } else {
-                toolUsed = "Smart Search (No Results)";
+                toolUsed = "Web Search (No Results)";
             }
         } else {
-            toolUsed = "Internal Knowledge"; 
+            toolUsed = "Internal Knowledge";
         }
 
         let finalMessages = [...messages];
         if (injectionData) {
-            // System Prompt này cực gắt để "tẩy não" AI quên kiến thức cũ
             finalMessages.push({ 
                 role: "system", 
                 content: `
-CRITICAL INSTRUCTION:
-You are Oceep. You have NO internal knowledge of events, prices, or facts after 2023.
-You MUST rely ENTIRELY on the provided "REAL-TIME SEARCH RESULTS" above to answer.
-- If the search results contradict what you "know", TRUST THE SEARCH RESULTS.
-- Cite the [SOURCE: url] for every fact you state.
+CRITICAL: You are Oceep. You possess NO internal knowledge of events after 2023.
+You MUST rely on the [LIVE WEB SEARCH RESULTS] provided above to answer.
+- Cite sources as [Title](Link).
+- If results are missing or blocked, admit you don't know rather than hallucinating.
 - Answer in Vietnamese.
-` 
+${injectionData}` 
             });
         }
 
@@ -211,7 +227,7 @@ You MUST rely ENTIRELY on the provided "REAL-TIME SEARCH RESULTS" above to answe
                 messages: finalMessages,
                 stream: false, 
                 max_tokens: 2500, 
-                temperature: 0.3 // Giảm nhiệt độ để AI bớt "sáng tạo" và bám sát context hơn
+                temperature: 0.5 
             }),
         });
 
