@@ -1,18 +1,5 @@
 // functions/api/handler.js
 
-/**
- * handler.js — "Brave Search Agent"
- *
- * WORKFLOW:
- * 1. THE MIND (Query Gen): Uses 'arcee-ai/trinity-mini' to decide IF and WHAT to search.
- * 2. THE HANDS (Search): Uses Brave Search (Public JSON Endpoint) for cleaner results.
- * 3. THE MOUTH (Answer): Uses your Main Model to answer.
- *
- * REQUIRED VARS:
- * - DECIDE_API_KEY (for Trinity)
- * - MINI_API_KEY / SMART_API_KEY (for Chat)
- */
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -46,17 +33,16 @@ async function safeFetch(url, opts = {}, ms = 10000) {
 }
 
 // ----------------------------
-// 1) QUERY GENERATOR ("The Mind")
+// 1) QUERY GENERATOR
 // ----------------------------
 async function generateSearchQuery(userPrompt, apiKey, debugSteps) {
-  if (!apiKey) return { needed: true, query: userPrompt }; 
+  if (!apiKey) return { needed: true, query: userPrompt };
 
   try {
     const systemPrompt = `You are a Search Optimizer.
     Analyze the user's request.
-    1. DECIDE: Does this need external/real-time info? (True/False)
-    2. QUERY: If True, write the BEST search query (in user's language).
-    
+    1. DECIDE: Does this need external info? (True/False)
+    2. QUERY: If True, write the BEST search query.
     RETURN JSON ONLY: { "needed": boolean, "query": "string" }`;
 
     const payload = {
@@ -80,20 +66,14 @@ async function generateSearchQuery(userPrompt, apiKey, debugSteps) {
     
     const data = await res.json();
     const content = data?.choices?.[0]?.message?.content || '{}';
-    
     let parsed;
-    try { 
-        parsed = JSON.parse(content); 
-    } catch (e) { 
+    try { parsed = JSON.parse(content); } catch (e) { 
         const needed = content.toLowerCase().includes('true');
         parsed = { needed, query: userPrompt };
     }
-
     debugSteps.push({ step: 'query_gen', output: parsed });
     return parsed;
-
   } catch (e) {
-    debugSteps.push({ query_gen_error: String(e) });
     return { needed: true, query: userPrompt };
   }
 }
@@ -103,13 +83,11 @@ async function generateSearchQuery(userPrompt, apiKey, debugSteps) {
 // ----------------------------
 async function searchBrave(query, debugSteps) {
   try {
-    // Brave Search Public Endpoint
     const url = `https://search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
-    
     const res = await safeFetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json' // Request JSON specifically
+        'Accept': 'application/json'
       }
     }, SEARCH_TIMEOUT_MS);
 
@@ -117,24 +95,14 @@ async function searchBrave(query, debugSteps) {
       debugSteps.push({ brave_error: res.status });
       return null;
     }
-
     const data = await res.json();
-    
-    // Parse Brave JSON Structure
-    if (!data || !data.web || !data.web.results) {
-      debugSteps.push({ brave_warning: 'no_web_results_in_json' });
-      return null;
-    }
+    if (!data || !data.web || !data.web.results) return null;
 
-    const results = data.web.results.map(r => ({
+    return data.web.results.map(r => ({
       title: r.title || 'No Title',
       link: r.url || r.source || '',
       snippet: r.description || ''
     }));
-
-    debugSteps.push({ brave_found: results.length });
-    return results;
-
   } catch (e) {
     debugSteps.push({ brave_exception: String(e) });
     return null;
@@ -155,7 +123,7 @@ export async function onRequestPost(context) {
     const { modelName = 'Smart', messages = [] } = body;
     const debug = { steps: [] };
 
-    // Config Model
+    // Config
     const apiConfig = {
       Mini: { key: env.MINI_API_KEY, model: 'openai/gpt-oss-20b:free' },
       Smart: { key: env.SMART_API_KEY, model: 'z-ai/glm-4.5-air:free' },
@@ -166,55 +134,54 @@ export async function onRequestPost(context) {
 
     const lastMsg = messages[messages.length - 1].content || '';
     let toolUsed = 'Internal Knowledge';
-    let injectionData = '';
+    let searchContext = '';
 
-    // --- STEP 1: GENERATE QUERY ---
+    // --- STEP 1 & 2: Search ---
     const queryKey = env.DECIDE_API_KEY || env.SMART_API_KEY;
     const decision = await generateSearchQuery(lastMsg, queryKey, debug.steps);
 
-    // --- STEP 2: SEARCH (Brave) ---
     if (decision.needed) {
         const results = await searchBrave(decision.query, debug.steps);
-        
         if (results && results.length > 0) {
             toolUsed = 'WebSearch (Brave)';
-            
-            const context = results.map((r, i) => 
-                `[${i+1}] Title: ${r.title}\nSource: ${r.link}\nSummary: ${r.snippet}`
+            searchContext = results.map((r, i) => 
+                `[${i+1}] Title: ${r.title}\n   Source: ${r.link}\n   Summary: ${r.snippet}`
             ).join('\n\n');
-
-            injectionData = `
-==========
-SYSTEM NOTE: WEB SEARCH RESULTS ACQUIRED.
-User Query: "${decision.query}"
-Brave Search Results:
-${context}
-==========
-`;
         } else {
-            toolUsed = 'WebSearch (Failed/No Results)';
-            debug.steps.push({ msg: 'Brave returned no data' });
+            toolUsed = 'WebSearch (No Results)';
         }
     }
 
-    // --- STEP 3: ANSWER (Strict Prompt) ---
+    // --- STEP 3: ANSWER (Chiến thuật mới) ---
     const finalMessages = [...messages];
 
+    // Thay vì dùng System Prompt, ta "nhét" kết quả vào thẳng tin nhắn cuối cùng của User.
+    // Điều này ép Model phải đọc nó như một phần của câu hỏi.
+    if (searchContext) {
+        const lastUserIndex = finalMessages.length - 1;
+        
+        // Tạo một nội dung User mới: "Câu hỏi cũ" + "Dữ liệu tìm được"
+        finalMessages[lastUserIndex].content = `
+User Question: "${lastMsg}"
+
+Below is real-time information I found on the web. Use it to answer the question above.
+[START WEB DATA]
+${searchContext}
+[END WEB DATA]
+
+IMPORTANT: Answer naturally in the user's language. Do NOT output JSON code. Do NOT output "query": "...". Just speak.
+`;
+    }
+
+    // System Prompt chỉ dùng để định hình tính cách
     const systemPrompt = {
         role: 'system',
-        content: `You are Oceep, a helpful AI assistant.
-        
-        INSTRUCTIONS:
-        1. Context: I have ALREADY performed a Brave web search. Results are above (SYSTEM NOTE).
-        2. Action: Read the results and answer the user naturally.
-        3. Prohibition: DO NOT output JSON, code blocks, or internal debug info.
-        4. Citation: Use [1], [2] to cite sources.
-        5. Fallback: If results are empty, use internal knowledge.
-        6. Language: Answer in the same language as the user.
-        
-        ${injectionData}`
+        content: `You are Oceep. You are a helpful assistant.
+        Refuse to act as a search engine. Do NOT output JSON. Do NOT output code blocks.
+        Simply answer the user's question using the provided text.`
     };
-
+    
+    // Đảm bảo System Prompt nằm đầu
     const cleanMessages = finalMessages.filter(m => m.role !== 'system');
     cleanMessages.unshift(systemPrompt);
 
@@ -230,7 +197,14 @@ ${context}
 
     if (!modelRes.ok) throw new Error('Model API failed');
     const data = await modelRes.json();
-    const answer = data?.choices?.[0]?.message?.content || '';
+    let answer = data?.choices?.[0]?.message?.content || '';
+
+    // --- FINAL SAFEGUARD (Bộ lọc cuối cùng) ---
+    // Nếu nó vẫn ngoan cố trả về JSON, ta sẽ "ép" nó thành text
+    if (answer.trim().startsWith('{') && answer.includes('"query"')) {
+        answer = "Xin lỗi, tôi đã tìm thấy thông tin nhưng gặp lỗi hiển thị. (Error: JSON Output Detected). Hãy hỏi lại cụ thể hơn.";
+        // Hoặc bạn có thể tự parse JSON đó nếu muốn, nhưng tốt nhất là báo lỗi.
+    }
 
     return new Response(JSON.stringify({
       content: answer,
@@ -239,6 +213,6 @@ ${context}
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message, stack: err.stack }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
   }
 }
