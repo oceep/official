@@ -1,24 +1,20 @@
 // functions/api/handler.js
 
 /**
- * Full handler.js — "Search Agent" clone 1:1
- * - Mini:  openai/gpt-oss-20b:free    -> env.MINI_API_KEY
- * - Smart: z-ai/glm-4.5-air:free      -> env.SMART_API_KEY
- * - Nerd:  amazon/nova-2-lite-v1:free -> env.NERD_API_KEY
+ * Full handler.js — "Search Agent" Architecture
  *
- * Search strategy:
- * 1) Try Serper.dev (if SERPER_API_KEY present)
- * 2) Fallback Brave Search JSON (no key)
+ * WORKFLOW:
+ * 1. THE MIND (Decision): Uses 'arcee-ai/trinity-mini:free' with DECIDE_API_KEY.
+ * - Prompt: "Does this need search? True/False"
+ * 2. THE HANDS (Search): If True, uses ScraperX with SCRAPERX_API_KEY.
+ * 3. THE MOUTH (Answer): Uses the user's selected model (Smart/Mini) to generate the final response.
  *
- * Crawler:
- * - Try ScrapeNinja (if SCRAPENINJA_KEY present)
- * - Else: use snippet returned by search
- *
- * Decision maker:
- * - If SEARCH_API_KEY present -> call OpenRouter classifier
- * - Else -> basic heuristic
- *
- * Notes: optimized for Cloudflare Pages (short timeouts, minimal HTML parsing).
+ * REQUIRED WORKER VARIABLES:
+ * - DECIDE_API_KEY   (For Arcee Trinity - The Decision Maker)
+ * - SCRAPERX_API_KEY (For searching Google)
+ * - MINI_API_KEY     (For Chat Model)
+ * - SMART_API_KEY    (For Chat Model)
+ * - NERD_API_KEY     (For Chat Model)
  */
 
 const corsHeaders = {
@@ -27,10 +23,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Title',
 };
 
-const DEFAULT_SEARCH_COUNT = 4; // number of search results to request
-const SCRAPE_TIMEOUT_MS = 3000; // max time to wait scraping a page (ms)
-const SEARCH_TIMEOUT_MS = 4000; // timeout for search calls
+// --- CONFIGURATION ---
+const DEFAULT_SEARCH_COUNT = 5;
+const SEARCH_TIMEOUT_MS = 15000;
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const DECISION_MODEL = 'arcee-ai/trinity-mini:free'; // Fast & Free
+const SCRAPERX_ENDPOINT = 'https://api.scraperx.com/'; // Verify this URL in your dashboard
 
 // ----------------------------
 // Helpers
@@ -41,7 +39,7 @@ function timeoutSignal(ms) {
   return { signal: controller.signal, clear: () => clearTimeout(id) };
 }
 
-async function safeFetch(url, opts = {}, ms = 4000) {
+async function safeFetch(url, opts = {}, ms = 10000) {
   const t = timeoutSignal(ms);
   try {
     const res = await fetch(url, { ...opts, signal: t.signal });
@@ -53,150 +51,105 @@ async function safeFetch(url, opts = {}, ms = 4000) {
   }
 }
 
-function jsonSafe(res) {
-  return res && res.json ? res.json().catch(() => null) : null;
+// ----------------------------
+// 1) DECISION LAYER ("THE MIND")
+// ----------------------------
+async function decideIfSearchNeeded(query, apiKey) {
+  if (!apiKey) return null; // If no key, we can't decide, usually default to false or heuristic
+  
+  try {
+    // strict "Train Prompt" to force True/False
+    const systemPrompt = `You are a Search Decision Bot. Your ONLY job is to determine if a query needs real-time Google Search.
+    
+    RULES:
+    - If the user asks for: Weather, Stock Prices, News, "Who is [person]", Sports Scores, Exchange Rates, or recent events (2024-2025) -> ANSWER: "True"
+    - If the user asks for: Coding help, Translations, Math, Greetings, General Knowledge, Creative Writing -> ANSWER: "False"
+    
+    OUTPUT FORMAT:
+    Just the word "True" or "False". Do not explain.`;
+
+    const payload = {
+      model: DECISION_MODEL,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: query }
+      ],
+      max_tokens: 5, // We only need 1 word
+      temperature: 0.0 // Zero temperature for maximum determinism
+    };
+    
+    const res = await safeFetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(payload)
+    }, 5000); // 5s timeout is plenty for Trinity
+    
+    if (!res.ok) return null;
+    const data = await res.json();
+    const answer = data?.choices?.[0]?.message?.content?.trim() || '';
+    
+    // Parse the strict output
+    if (answer.toLowerCase().includes('true')) return true;
+    if (answer.toLowerCase().includes('false')) return false;
+    
+    return null; // Fallback if model hallucinates
+  } catch (e) {
+    // console.error("Decision model failed", e);
+    return null; 
+  }
 }
 
 // ----------------------------
-// 1) SEARCH LAYER
-// Try Serper.dev (if key) else Brave Search (no key)
+// 2) SEARCH LAYER (ScraperX)
 // ----------------------------
-async function searchSerper(query, apiKey, count = DEFAULT_SEARCH_COUNT) {
-  if (!apiKey) return null;
+async function searchScraperX(query, apiKey, count = DEFAULT_SEARCH_COUNT) {
+  // Construct Google Search URL (Vietnam localized for better local results)
+  const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=vi&gl=vn&num=${count + 2}`;
+  
+  // Call ScraperX
+  const apiUrl = new URL(SCRAPERX_ENDPOINT);
+  apiUrl.searchParams.set('api_key', apiKey);
+  apiUrl.searchParams.set('url', googleUrl);
+  apiUrl.searchParams.set('autoparse', 'true'); // We want JSON back
+
   try {
-    const url = `https://google.serper.dev/search`;
-    const body = { q: query, num: count };
-    const res = await safeFetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-KEY': apiKey,
-        'User-Agent': 'Mozilla/5.0'
-      },
-      body: JSON.stringify(body)
+    const res = await safeFetch(apiUrl.toString(), {
+      method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0' }
     }, SEARCH_TIMEOUT_MS);
 
     if (!res.ok) return null;
-    const data = await res.json();
-    // Serper shape varies; map to common format
-    const items = [];
-    if (data && data.organic) {
-      for (const it of data.organic.slice(0, count)) {
-        items.push({
-          title: it.title || it.snippet || '',
-          link: it.link || it.source || '',
-          snippet: it.snippet || it.description || ''
-        });
-      }
+    
+    const contentType = res.headers.get('content-type') || '';
+    let data = null;
+    
+    if (contentType.includes('application/json')) {
+      data = await res.json();
+    } else {
+        // If they send back HTML string even with autoparse
+        // We might need to implement a parser here, but usually autoparse works.
+        return null; 
     }
-    return items.length ? items : null;
-  } catch (e) {
-    // console.error('Serper error', e);
+
+    // Map common ScraperX / ScraperAPI JSON shapes
+    // Usually found in 'organic_results' or 'organic'
+    const results = data.organic_results || data.organic || data.results || [];
+    
+    if (Array.isArray(results) && results.length > 0) {
+      return results.slice(0, count).map(r => ({
+        title: r.title || '',
+        link: r.link || r.url || '',
+        snippet: r.snippet || r.description || ''
+      }));
+    }
     return null;
-  }
-}
-
-async function searchBrave(query, count = DEFAULT_SEARCH_COUNT) {
-  try {
-    const url = `https://search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${count}`;
-    const res = await safeFetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' } }, SEARCH_TIMEOUT_MS);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data?.web?.results) return null;
-    return data.web.results.slice(0, count).map(r => ({
-      title: r.title || '',
-      link: r.url || r.canonical || r.source || '',
-      snippet: r.description || ''
-    }));
-  } catch (e) {
-    // console.error('Brave search error', e);
-    return null;
-  }
-}
-
-async function webSearch(query, env) {
-  // try Serper first if key present
-  const serperKey = env.SERPER_API_KEY;
-  let results = null;
-  if (serperKey) {
-    results = await searchSerper(query, serperKey, DEFAULT_SEARCH_COUNT);
-    if (results) return { provider: 'serper', results };
-  }
-  // fallback -> Brave
-  results = await searchBrave(query, DEFAULT_SEARCH_COUNT);
-  if (results) return { provider: 'brave', results };
-  return null;
-}
-
-// ----------------------------
-// 2) CRAWLER LAYER (lightweight)
-// - Use ScrapeNinja if key available, else skip full scrape
-// - We intentionally avoid heavy HTML parsing: return text snippet only
-// ----------------------------
-async function scrapeWithScrapeNinja(url, key) {
-  if (!key) return null;
-  try {
-    const apiUrl = `https://api.scrapeninja.net/raw?token=${encodeURIComponent(key)}&url=${encodeURIComponent(url)}`;
-    const res = await safeFetch(apiUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }, SCRAPE_TIMEOUT_MS);
-    if (!res.ok) return null;
-    const data = await res.text();
-    // very light cleanup: remove scripts/styles tags quickly
-    const cleaned = data
-      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    return cleaned.slice(0, 1500);
   } catch (e) {
     return null;
   }
 }
 
 // ----------------------------
-// 3) DECISION MAKER
-// - If SEARCH_API_KEY set: call OpenRouter classifier
-// - Else: simple heuristic (questions with keywords real-time: price, hôm nay, weather, giá..., tin tức, flight, chuyến bay, giờ...)
-// ----------------------------
-async function callOpenRouterClassifier(query, key) {
-  if (!key) return null;
-  try {
-    const payload = {
-      model: 'arcee-ai/trinity-mini:free',
-      messages: [
-        { role: 'system', content: 'Return ONLY "true" or "false". "true" when the query requires real-time external info (news, prices, weather, flight status). "false" otherwise.' },
-        { role: 'user', content: query }
-      ],
-      max_tokens: 5,
-      temperature: 0
-    };
-    const res = await safeFetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify(payload)
-    }, 3000);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const text = data?.choices?.[0]?.message?.content?.toLowerCase() || '';
-    return text.includes('true');
-  } catch (e) {
-    return null;
-  }
-}
-
-function heuristicNeedSearch(query) {
-  const q = query.toLowerCase();
-  const keywords = ['hôm nay', 'giá', 'price', 'giờ', 'thời tiết', 'weather', 'tin tức', 'tình trạng', 'chuyến bay', 'flight', 'tỷ giá', 'crypto', 'bitcoin', 'btc', 'bnb', 'eth'];
-  for (const k of keywords) if (q.includes(k)) return true;
-  // questions that are clearly static:
-  const staticHints = ['how to', 'làm sao', 'tutorial', 'code', 'phiên dịch', 'translate', 'dịch', 'bài tập', 'proof', 'chứng minh'];
-  for (const s of staticHints) if (q.includes(s)) return false;
-  // default: true (safer)
-  return true;
-}
-
-// ----------------------------
-// 4) MODEL CALL (OpenRouter chat completions)
+// 3) CHAT MODEL LAYER
 // ----------------------------
 async function callOpenRouterChat(model, apiKey, messages, max_tokens = 2000) {
   if (!apiKey) throw new Error('Missing API key for model');
@@ -204,7 +157,7 @@ async function callOpenRouterChat(model, apiKey, messages, max_tokens = 2000) {
     model,
     messages,
     max_tokens,
-    temperature: 0.5,
+    temperature: 0.7,
     stream: false
   };
   const res = await safeFetch(OPENROUTER_URL, {
@@ -216,7 +169,8 @@ async function callOpenRouterChat(model, apiKey, messages, max_tokens = 2000) {
       'X-Title': 'Oceep'
     },
     body: JSON.stringify(payload)
-  }, 20000); // allow longer for model
+  }, 30000); 
+  
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(`Model call failed ${res.status} ${txt}`);
@@ -226,7 +180,7 @@ async function callOpenRouterChat(model, apiKey, messages, max_tokens = 2000) {
 }
 
 // ----------------------------
-// 5) MAIN HANDLER
+// 4) MAIN WORKER
 // ----------------------------
 export async function onRequestOptions() {
   return new Response(null, { status: 204, headers: corsHeaders });
@@ -238,10 +192,10 @@ export async function onRequestPost(context) {
     const body = await request.json().catch(() => ({}));
     const { modelName = 'Smart', messages = [] } = body;
 
-    // Validate model mapping
+    // Validate main chat model config
     const apiConfig = {
       Mini: { key: env.MINI_API_KEY, model: 'openai/gpt-oss-20b:free' },
-      Smart: { key: env.SMART_API_KEY, model: 'z-ai/glm-4.5-air:free' },
+      Smart: { key: env.SMART_API_KEY, model: 'z-ai/glm-4.5-air:free' }, 
       Nerd: { key: env.NERD_API_KEY, model: 'amazon/nova-2-lite-v1:free' }
     };
     const config = apiConfig[modelName];
@@ -249,7 +203,6 @@ export async function onRequestPost(context) {
       return new Response(JSON.stringify({ error: 'Invalid modelName' }), { status: 400, headers: corsHeaders });
     }
 
-    // Basic input validation
     if (!Array.isArray(messages) || messages.length === 0) {
       return new Response(JSON.stringify({ error: 'messages must be a non-empty array' }), { status: 400, headers: corsHeaders });
     }
@@ -259,94 +212,76 @@ export async function onRequestPost(context) {
     let injectionData = '';
     const debug = { steps: [] };
 
-    // Decide whether to search
+    // --- STEP 1: DECIDE (The Mind) ---
+    // We use DECIDE_API_KEY. If not set, we skip search or default to heuristic.
     let needSearch = null;
-    if (env.SEARCH_API_KEY) {
-      try {
-        const r = await callOpenRouterClassifier(lastMsg, env.SEARCH_API_KEY);
-        if (typeof r === 'boolean') {
-          needSearch = r;
-          debug.steps.push({ classifier: 'openrouter', result: r });
-        }
-      } catch (e) {
-        debug.steps.push({ classifier_error: String(e) });
-      }
-    }
-    if (needSearch === null) {
-      needSearch = heuristicNeedSearch(lastMsg);
-      debug.steps.push({ classifier: 'heuristic', result: needSearch });
-    }
-
-    if (needSearch) {
-      // Perform web search
-      const searchRes = await webSearch(lastMsg, env);
-      if (searchRes && searchRes.results && searchRes.results.length > 0) {
-        toolUsed = `WebSearch (${searchRes.provider})`;
-        debug.steps.push({ search: { provider: searchRes.provider, count: searchRes.results.length } });
-
-        // For each top candidate, optionally try light scrape (only if SCRAPENINJA_KEY present)
-        const scraped = [];
-        const snKey = env.SCRAPENINJA_KEY;
-        for (let i = 0; i < Math.min(2, searchRes.results.length); i++) {
-          const it = searchRes.results[i];
-          let content = null;
-          if (snKey && it.link) {
-            try {
-              content = await scrapeWithScrapeNinja(it.link, snKey);
-              debug.steps.push({ scrape: { link: it.link, ok: !!content } });
-            } catch (e) {
-              debug.steps.push({ scrape_error: String(e) });
-              content = null;
-            }
-          }
-          scraped.push({
-            title: it.title,
-            link: it.link,
-            snippet: it.snippet,
-            content: content // can be null -> model will fallback to snippet
-          });
-        }
-
-        injectionData = `[LIVE WEB SEARCH RESULTS]\nProvider: ${searchRes.provider}\n${JSON.stringify(scraped, null, 2)}\n\n`;
-      } else {
-        toolUsed = 'WebSearch (No Results)';
-        debug.steps.push({ search: 'no-results' });
-      }
+    if (env.DECIDE_API_KEY) {
+        debug.steps.push({ action: 'checking_intent', model: DECISION_MODEL });
+        needSearch = await decideIfSearchNeeded(lastMsg, env.DECIDE_API_KEY);
+        debug.steps.push({ intent_result: needSearch });
     } else {
-      debug.steps.push({ search: 'skipped by classifier' });
+        debug.steps.push({ error: 'DECIDE_API_KEY_missing' });
+        // Optional: fallback to heuristic if key missing
+        // needSearch = true; 
     }
 
-    // Build final messages to the model
+    // --- STEP 2: EXECUTE (The Hands) ---
+    if (needSearch === true && env.SCRAPERX_API_KEY) {
+      debug.steps.push({ action: 'searching_scraperx' });
+      
+      const searchResults = await searchScraperX(lastMsg, env.SCRAPERX_API_KEY, DEFAULT_SEARCH_COUNT);
+      
+      if (searchResults && searchResults.length > 0) {
+        toolUsed = 'WebSearch (ScraperX)';
+        debug.steps.push({ search_count: searchResults.length });
+
+        // Format results for the final model
+        const contextString = searchResults.map((item, idx) => 
+            `[${idx+1}] Title: ${item.title}\n    Link: ${item.link}\n    Snippet: ${item.snippet}`
+        ).join('\n\n');
+
+        injectionData = `
+=== LIVE WEB SEARCH RESULTS ===
+${contextString}
+=== END RESULTS ===
+`;
+      } else {
+        toolUsed = 'WebSearch (Empty)';
+        debug.steps.push({ search: 'no_results' });
+      }
+    }
+
+    // --- STEP 3: ANSWER (The Mouth) ---
     const finalMessages = [...messages];
 
-    if (injectionData) {
-      finalMessages.push({
+    // Inject System Instruction
+    const systemInstruction = {
         role: 'system',
-        content: `CRITICAL: You are "Oceep". You have NO internal knowledge after 2023. Use the LIVE WEB SEARCH RESULTS below when answering. Cite sources in the format [Title](Link). If data missing, say "không có thông tin". Answer in Vietnamese.\n\n${injectionData}`
-      });
-    } else {
-      finalMessages.push({
-        role: 'system',
-        content: `CRITICAL: You are "Oceep". If the user asks for real-time info and you don't have it, say "không có thông tin". Answer in Vietnamese.`
-      });
-    }
+        content: `You are "Oceep".
+        
+        INSTRUCTIONS:
+        1. If "LIVE WEB SEARCH RESULTS" are provided, you MUST use them to answer.
+        2. If the decision model said "True" (Search Needed) but results are empty, say "I tried to search but found no results."
+        3. If no search results are provided, use your internal knowledge.
+        4. Answer in the same language as the user.
+        
+        ${injectionData}`
+    };
 
-    // Call model on OpenRouter
+    finalMessages.unshift(systemInstruction);
+
     const modelRes = await callOpenRouterChat(config.model, config.key, finalMessages, 2000).catch(err => {
-      debug.model_error = String(err);
-      return null;
+        debug.model_error = String(err);
+        return null;
     });
 
     const answer = modelRes?.choices?.[0]?.message?.content || null;
 
-    // Return result
-    const out = {
+    return new Response(JSON.stringify({
       content: answer,
       toolUsed,
       debug
-    };
-
-    return new Response(JSON.stringify(out), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message, stack: err.stack }), { status: 500, headers: corsHeaders });
