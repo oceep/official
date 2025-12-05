@@ -12,7 +12,6 @@ const EXA_API_URL = 'https://api.exa.ai/search';
 const DECISION_MODEL = 'arcee-ai/trinity-mini:free'; 
 
 // ----------------------------
-// Helpers
 // ----------------------------
 async function safeFetch(url, opts = {}, ms = 15000) {
   const controller = new AbortController();
