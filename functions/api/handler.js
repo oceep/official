@@ -14,7 +14,7 @@ const DECISION_MODEL = 'arcee-ai/trinity-mini:free';
 // ----------------------------
 // Helpers
 // ----------------------------
-async function safeFetch(url, opts = {}, ms = 15000) {
+async function safeFetch(url, opts = {}, ms = 20000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), ms);
   try {
@@ -35,24 +35,23 @@ function cleanResponse(text) {
 }
 
 // ----------------------------
-// 1. SMART ROUTER (Hỗ trợ Không Dấu)
+// 1. SMART ROUTER (Bộ lọc từ khóa Việt)
 // ----------------------------
 async function analyzeRequest(userPrompt, apiKey, debugSteps) {
   const lower = userPrompt.toLowerCase();
 
-  // --- RULE 1: NÉ SEARCH (SKIP) ---
+  // SKIP RULES (Né Search)
   const skipTriggers = [
       'viết', 'write', 'dịch', 'translate', 'code', 'lập trình', 'tính', 'calculate', 
       'giải', 'solve', 'tạo', 'create', 'sáng tác', 'compose', 'check', 'kiểm tra lỗi',
       'viet', 'dich', 'lap trinh', 'tinh', 'giai', 'tao', 'sang tac', 'kiem tra', 'sua loi'
   ];
-  
-  if (skipTriggers.some(w => lower.startsWith(w) || lower.includes(` ${w} `))) {
+  if (skipTriggers.some(w => lower.startsWith(w))) {
       debugSteps.push({ router: 'skip_rule', msg: 'Skipping search' });
       return { needed: false, query: '' };
   }
 
-  // --- RULE 2: ÉP SEARCH (FORCE) ---
+  // FORCE RULES (Ép Search)
   const forceTriggers = [
       'address', 'location', 'weather', 'price', 'news', 'latest', 'who is', 'what is', 'review',
       'địa chỉ', 'ở đâu', 'chỗ nào', 'thời tiết', 'giá', 'tin tức', 'sự kiện', 'hôm nay', 
@@ -62,11 +61,11 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
   ];
 
   if (forceTriggers.some(w => lower.includes(w))) {
-      debugSteps.push({ router: 'force_rule', msg: 'Forcing search (keyword detected)' });
+      debugSteps.push({ router: 'force_rule', msg: 'Forcing search' });
       return { needed: true, query: userPrompt };
   }
 
-  // --- RULE 3: TRINITY AI DECISION ---
+  // AI DECISION (Dùng AI đoán)
   if (!apiKey) return { needed: false, query: '' };
 
   try {
@@ -85,19 +84,15 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(payload)
-    }, 4000);
+    }, 5000);
     
     if (!res.ok) throw new Error('Router API failed');
     const data = await res.json();
     const content = data?.choices?.[0]?.message?.content || '{}';
-    
     let parsed;
-    try { parsed = JSON.parse(content); } catch (e) { 
-        parsed = { needed: false, query: userPrompt };
-    }
+    try { parsed = JSON.parse(content); } catch (e) { parsed = { needed: false, query: userPrompt }; }
     debugSteps.push({ router: 'ai_decision', output: parsed });
     return parsed;
-
   } catch (e) {
     return { needed: false, query: userPrompt };
   }
@@ -118,20 +113,22 @@ async function searchExa(query, apiKey, debugSteps) {
             type: "neural",
             useAutoprompt: true,
             numResults: 2, 
-            contents: {
-                text: { maxCharacters: 1200 }
-            }
+            contents: { text: { maxCharacters: 1200 } }
         };
 
         const res = await safeFetch(EXA_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
             body: JSON.stringify(payload)
-        }, 12000);
+        }, 15000);
 
-        if (!res.ok) return null;
+        if (!res.ok) {
+            const txt = await res.text();
+            debugSteps.push({ exa_fail: res.status, msg: txt });
+            return null;
+        }
+
         const data = await res.json();
-        
         if (data && data.results && data.results.length > 0) {
             return data.results.map(r => ({
                 title: r.title || 'No Title',
@@ -161,19 +158,20 @@ export async function onRequestPost(context) {
     const { modelName = 'Smart', messages = [] } = body;
     const debug = { steps: [] };
 
-    // --- UPDATED MODEL CONFIG ---
+    // --- MODEL CONFIG (Safe Models) ---
     const apiConfig = {
       Mini: { 
           key: env.MINI_API_KEY, 
-          model: 'qwen/qwen3-4b:free' 
+          model: 'qwen/qwen-2.5-7b-instruct:free' 
       },
       Smart: { 
           key: env.SMART_API_KEY, 
-          model: 'mistralai/mistral-small-3.1-24b-instruct:free' 
+          // Mistral hoặc Gemini Flash Free đều mạnh về tiếng Việt
+          model: 'google/gemini-2.0-flash-exp:free' 
       },
       Nerd: { 
           key: env.NERD_API_KEY, 
-          model: 'z-ai/glm-4.5-air:free' // <-- Đã đổi sang GLM-4.5-Air
+          model: 'thudm/glm-4-9b-chat:free' 
       }
     };
 
@@ -191,7 +189,6 @@ export async function onRequestPost(context) {
     // --- B2: GỌI EXA ---
     if (analysis.needed) {
         const results = await searchExa(analysis.query, env.EXA_API_KEY, debug.steps);
-        
         if (results) {
             toolUsed = 'WebSearch (Exa.ai)';
             searchContext = results.map((r, i) => 
@@ -202,29 +199,33 @@ export async function onRequestPost(context) {
         }
     }
 
-    // --- B3: TRẢ LỜI ---
+    // --- B3: TRẢ LỜI (With Language Enforcement) ---
     const finalMessages = [...messages];
 
     if (searchContext) {
         const lastIdx = finalMessages.length - 1;
+        // Inject Search Data + LANGUAGE INSTRUCTION
         finalMessages[lastIdx].content = `
 User Query: "${lastMsg}"
 
 [SYSTEM DATA: EXA SEARCH RESULTS]
 ${searchContext}
 
-[INSTRUCTION]
-Answer based ONLY on the search results above. Cite sources [1].
+[CRITICAL INSTRUCTION]
+1. Answer the user's query based ONLY on the search results above.
+2. LANGUAGE RULE: You MUST answer in the SAME LANGUAGE as the User's Query. 
+   - If User asks in Vietnamese -> Answer in VIETNAMESE (Translate search results if needed).
+   - If User asks in English -> Answer in English.
+3. Cite sources as [1].
 `;
     }
 
-    const systemPrompt = {
-        role: 'system',
-        content: `You are Oceep. Helpful and direct.`
-    };
-    
+    // System Prompt
     const cleanMessages = finalMessages.filter(m => m.role !== 'system');
-    cleanMessages.unshift(systemPrompt);
+    cleanMessages.unshift({ 
+        role: 'system', 
+        content: 'You are Oceep. You act as a knowledgeable assistant. ALWAYS answer in the language of the user.' 
+    });
 
     const modelRes = await safeFetch(OPENROUTER_URL, {
       method: 'POST',
@@ -234,15 +235,22 @@ Answer based ONLY on the search results above. Cite sources [1].
           messages: cleanMessages,
           max_tokens: 2000
       })
-    }, 40000);
+    }, 45000);
 
-    if (!modelRes.ok) throw new Error('Model API failed');
+    if (!modelRes.ok) {
+        const errorText = await modelRes.text();
+        try {
+            const errJson = JSON.parse(errorText);
+            throw new Error(`OpenRouter Error: ${errJson.error?.message || errorText}`);
+        } catch (e) {
+            throw new Error(`OpenRouter Failed ${modelRes.status}: ${errorText}`);
+        }
+    }
+
     const data = await modelRes.json();
     let answer = data?.choices?.[0]?.message?.content || '';
 
     answer = cleanResponse(answer);
-
-    if (answer.startsWith('{')) answer = "Lỗi hiển thị dữ liệu.";
 
     return new Response(JSON.stringify({
       content: answer,
@@ -251,6 +259,9 @@ Answer based ONLY on the search results above. Cite sources [1].
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ 
+        error: err.message, 
+        stack: err.stack 
+    }), { status: 500, headers: corsHeaders });
   }
 }
