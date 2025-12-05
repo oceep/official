@@ -6,15 +6,14 @@
  * WORKFLOW:
  * 1. THE MIND (Decision): Uses 'arcee-ai/trinity-mini:free' with DECIDE_API_KEY.
  * - Prompt: "Does this need search? True/False"
- * 2. THE HANDS (Search): If True, uses ScraperX with SCRAPERX_API_KEY.
- * 3. THE MOUTH (Answer): Uses the user's selected model (Smart/Mini) to generate the final response.
+ * - Fallback: If model fails/timeouts, DEFAULT TO TRUE (Search).
+ * 2. THE HANDS (Search): If True, uses ScraperX (SCRAPERX_API_KEY).
+ * 3. THE MOUTH (Answer): Uses the user's selected model (Smart/Mini) to answer.
  *
  * REQUIRED WORKER VARIABLES:
- * - DECIDE_API_KEY   (For Arcee Trinity - The Decision Maker)
- * - SCRAPERX_API_KEY (For searching Google)
- * - MINI_API_KEY     (For Chat Model)
- * - SMART_API_KEY    (For Chat Model)
- * - NERD_API_KEY     (For Chat Model)
+ * - DECIDE_API_KEY   (For Arcee Trinity)
+ * - SCRAPERX_API_KEY (For ScraperX)
+ * - MINI_API_KEY, SMART_API_KEY, NERD_API_KEY (For Chat)
  */
 
 const corsHeaders = {
@@ -25,10 +24,14 @@ const corsHeaders = {
 
 // --- CONFIGURATION ---
 const DEFAULT_SEARCH_COUNT = 5;
-const SEARCH_TIMEOUT_MS = 15000;
+const SEARCH_TIMEOUT_MS = 20000; // 20s (Scrapers can be slow)
+const DECISION_TIMEOUT_MS = 4000; // 4s (Decision must be fast)
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const DECISION_MODEL = 'arcee-ai/trinity-mini:free'; // Fast & Free
-const SCRAPERX_ENDPOINT = 'https://api.scraperx.com/'; // Verify this URL in your dashboard
+const DECISION_MODEL = 'arcee-ai/trinity-mini:free';
+
+// !IMPORTANT: Check if ScraperX uses 'api.scraperx.com' or another URL.
+// Standard pattern for scraper APIs is usually: https://api.scraperx.com/
+const SCRAPERX_ENDPOINT = 'https://api.scraperx.com/'; 
 
 // ----------------------------
 // Helpers
@@ -54,19 +57,19 @@ async function safeFetch(url, opts = {}, ms = 10000) {
 // ----------------------------
 // 1) DECISION LAYER ("THE MIND")
 // ----------------------------
-async function decideIfSearchNeeded(query, apiKey) {
-  if (!apiKey) return null; // If no key, we can't decide, usually default to false or heuristic
-  
+async function decideIfSearchNeeded(query, apiKey, debugSteps) {
+  if (!apiKey) {
+    debugSteps.push({ decision: 'no_key_defaulting_true' });
+    return true; // No key? Default to Search.
+  }
+
   try {
-    // strict "Train Prompt" to force True/False
-    const systemPrompt = `You are a Search Decision Bot. Your ONLY job is to determine if a query needs real-time Google Search.
-    
-    RULES:
-    - If the user asks for: Weather, Stock Prices, News, "Who is [person]", Sports Scores, Exchange Rates, or recent events (2024-2025) -> ANSWER: "True"
-    - If the user asks for: Coding help, Translations, Math, Greetings, General Knowledge, Creative Writing -> ANSWER: "False"
-    
-    OUTPUT FORMAT:
-    Just the word "True" or "False". Do not explain.`;
+    // Strict prompt to force a boolean answer
+    const systemPrompt = `You are a Search Decision Bot. 
+    Analyze the user Query.
+    - If it asks for real-time info (News, Weather, Sports, Stock, "Who is", Events 2024-2025), output "True".
+    - If it is static (Math, Code, Translate, Greeting), output "False".
+    - Output ONLY "True" or "False".`;
 
     const payload = {
       model: DECISION_MODEL,
@@ -74,43 +77,53 @@ async function decideIfSearchNeeded(query, apiKey) {
         { role: 'system', content: systemPrompt },
         { role: 'user', content: query }
       ],
-      max_tokens: 5, // We only need 1 word
-      temperature: 0.0 // Zero temperature for maximum determinism
+      max_tokens: 5,
+      temperature: 0.0 // Strict
     };
     
     const res = await safeFetch(OPENROUTER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(payload)
-    }, 5000); // 5s timeout is plenty for Trinity
+    }, DECISION_TIMEOUT_MS);
     
-    if (!res.ok) return null;
+    if (!res.ok) {
+        debugSteps.push({ decision_error: `status_${res.status}` });
+        return true; // API Error? Default to Search.
+    }
+
     const data = await res.json();
     const answer = data?.choices?.[0]?.message?.content?.trim() || '';
-    
-    // Parse the strict output
+    debugSteps.push({ decision_raw_output: answer });
+
     if (answer.toLowerCase().includes('true')) return true;
     if (answer.toLowerCase().includes('false')) return false;
     
-    return null; // Fallback if model hallucinates
+    // If model says something weird ("I think so"), default to True.
+    return true; 
+
   } catch (e) {
-    // console.error("Decision model failed", e);
-    return null; 
+    debugSteps.push({ decision_exception: String(e) });
+    return true; // Exception? Default to Search.
   }
 }
 
 // ----------------------------
 // 2) SEARCH LAYER (ScraperX)
 // ----------------------------
-async function searchScraperX(query, apiKey, count = DEFAULT_SEARCH_COUNT) {
-  // Construct Google Search URL (Vietnam localized for better local results)
+async function searchScraperX(query, apiKey, count = DEFAULT_SEARCH_COUNT, debugSteps) {
+  if (!apiKey) {
+    debugSteps.push({ search_error: 'missing_scraperx_key' });
+    return null;
+  }
+
   const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=vi&gl=vn&num=${count + 2}`;
   
-  // Call ScraperX
+  // Construct API URL
   const apiUrl = new URL(SCRAPERX_ENDPOINT);
   apiUrl.searchParams.set('api_key', apiKey);
   apiUrl.searchParams.set('url', googleUrl);
-  apiUrl.searchParams.set('autoparse', 'true'); // We want JSON back
+  apiUrl.searchParams.set('autoparse', 'true'); // Essential for JSON results
 
   try {
     const res = await safeFetch(apiUrl.toString(), {
@@ -118,32 +131,35 @@ async function searchScraperX(query, apiKey, count = DEFAULT_SEARCH_COUNT) {
       headers: { 'User-Agent': 'Mozilla/5.0' }
     }, SEARCH_TIMEOUT_MS);
 
-    if (!res.ok) return null;
-    
-    const contentType = res.headers.get('content-type') || '';
-    let data = null;
-    
-    if (contentType.includes('application/json')) {
-      data = await res.json();
-    } else {
-        // If they send back HTML string even with autoparse
-        // We might need to implement a parser here, but usually autoparse works.
-        return null; 
+    if (!res.ok) {
+        debugSteps.push({ search_status: res.status, msg: 'scraper_failed' });
+        return null;
     }
-
-    // Map common ScraperX / ScraperAPI JSON shapes
-    // Usually found in 'organic_results' or 'organic'
-    const results = data.organic_results || data.organic || data.results || [];
     
-    if (Array.isArray(results) && results.length > 0) {
-      return results.slice(0, count).map(r => ({
-        title: r.title || '',
-        link: r.link || r.url || '',
-        snippet: r.snippet || r.description || ''
-      }));
+    // Attempt to parse JSON
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = await res.json();
+      
+      // Check for common Scraper API result shapes
+      const organic = data.organic_results || data.organic || data.results || [];
+      
+      if (Array.isArray(organic) && organic.length > 0) {
+         return organic.slice(0, count).map(r => ({
+           title: r.title || 'No Title',
+           link: r.link || r.url || '#',
+           snippet: r.snippet || r.description || ''
+         }));
+      } else {
+         debugSteps.push({ search_warning: 'json_returned_but_empty_array', data_preview: JSON.stringify(data).slice(0, 100) });
+      }
+    } else {
+        debugSteps.push({ search_warning: 'response_was_not_json', type: contentType });
     }
     return null;
+
   } catch (e) {
+    debugSteps.push({ search_exception: String(e) });
     return null;
   }
 }
@@ -169,7 +185,7 @@ async function callOpenRouterChat(model, apiKey, messages, max_tokens = 2000) {
       'X-Title': 'Oceep'
     },
     body: JSON.stringify(payload)
-  }, 30000); 
+  }, 40000); 
   
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
@@ -192,95 +208,79 @@ export async function onRequestPost(context) {
     const body = await request.json().catch(() => ({}));
     const { modelName = 'Smart', messages = [] } = body;
 
-    // Validate main chat model config
+    // Config
     const apiConfig = {
       Mini: { key: env.MINI_API_KEY, model: 'openai/gpt-oss-20b:free' },
-      Smart: { key: env.SMART_API_KEY, model: 'z-ai/glm-4.5-air:free' }, 
+      Smart: { key: env.SMART_API_KEY, model: 'z-ai/glm-4.5-air:free' },
       Nerd: { key: env.NERD_API_KEY, model: 'amazon/nova-2-lite-v1:free' }
     };
     const config = apiConfig[modelName];
-    if (!config) {
-      return new Response(JSON.stringify({ error: 'Invalid modelName' }), { status: 400, headers: corsHeaders });
-    }
-
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return new Response(JSON.stringify({ error: 'messages must be a non-empty array' }), { status: 400, headers: corsHeaders });
-    }
+    if (!config) return new Response(JSON.stringify({ error: 'Invalid modelName' }), { status: 400, headers: corsHeaders });
+    if (!messages.length) return new Response(JSON.stringify({ error: 'Empty messages' }), { status: 400, headers: corsHeaders });
 
     const lastMsg = messages[messages.length - 1].content || '';
     let toolUsed = 'Internal Knowledge';
     let injectionData = '';
     const debug = { steps: [] };
 
-    // --- STEP 1: DECIDE (The Mind) ---
-    // We use DECIDE_API_KEY. If not set, we skip search or default to heuristic.
-    let needSearch = null;
-    if (env.DECIDE_API_KEY) {
-        debug.steps.push({ action: 'checking_intent', model: DECISION_MODEL });
-        needSearch = await decideIfSearchNeeded(lastMsg, env.DECIDE_API_KEY);
-        debug.steps.push({ intent_result: needSearch });
-    } else {
-        debug.steps.push({ error: 'DECIDE_API_KEY_missing' });
-        // Optional: fallback to heuristic if key missing
-        // needSearch = true; 
-    }
+    // --- STEP 1: DECIDE ---
+    debug.steps.push({ step: '1_decision', model: DECISION_MODEL });
+    const needSearch = await decideIfSearchNeeded(lastMsg, env.DECIDE_API_KEY, debug.steps);
+    debug.steps.push({ decision_final: needSearch });
 
-    // --- STEP 2: EXECUTE (The Hands) ---
-    if (needSearch === true && env.SCRAPERX_API_KEY) {
-      debug.steps.push({ action: 'searching_scraperx' });
+    // --- STEP 2: SEARCH (If Needed) ---
+    if (needSearch) {
+      debug.steps.push({ step: '2_searching', provider: 'scraperx' });
       
-      const searchResults = await searchScraperX(lastMsg, env.SCRAPERX_API_KEY, DEFAULT_SEARCH_COUNT);
+      const searchResults = await searchScraperX(lastMsg, env.SCRAPERX_API_KEY, DEFAULT_SEARCH_COUNT, debug.steps);
       
       if (searchResults && searchResults.length > 0) {
         toolUsed = 'WebSearch (ScraperX)';
-        debug.steps.push({ search_count: searchResults.length });
-
-        // Format results for the final model
         const contextString = searchResults.map((item, idx) => 
-            `[${idx+1}] Title: ${item.title}\n    Link: ${item.link}\n    Snippet: ${item.snippet}`
+            `[${idx+1}] ${item.title}\nLINK: ${item.link}\nDESC: ${item.snippet}`
         ).join('\n\n');
 
-        injectionData = `
-=== LIVE WEB SEARCH RESULTS ===
-${contextString}
-=== END RESULTS ===
-`;
+        injectionData = `\n\n[LIVE WEB SEARCH RESULTS]\n${contextString}\n[END RESULTS]\n\n`;
       } else {
-        toolUsed = 'WebSearch (Empty)';
-        debug.steps.push({ search: 'no_results' });
+        toolUsed = 'WebSearch (Empty/Failed)';
+        debug.steps.push({ msg: 'Search logic ran but returned no results.' });
       }
+    } else {
+      debug.steps.push({ step: '2_skipped_search' });
     }
 
-    // --- STEP 3: ANSWER (The Mouth) ---
+    // --- STEP 3: ANSWER ---
     const finalMessages = [...messages];
-
-    // Inject System Instruction
-    const systemInstruction = {
+    
+    // Inject the Search Results into the System Prompt or the User Message
+    // Putting it in System Prompt is usually more reliable for instruction following.
+    const systemPrompt = {
         role: 'system',
-        content: `You are "Oceep".
+        content: `You are Oceep.
         
-        INSTRUCTIONS:
-        1. If "LIVE WEB SEARCH RESULTS" are provided, you MUST use them to answer.
-        2. If the decision model said "True" (Search Needed) but results are empty, say "I tried to search but found no results."
-        3. If no search results are provided, use your internal knowledge.
-        4. Answer in the same language as the user.
+        CRITICAL INSTRUCTION:
+        1. I have performed a live Google search for you. The results are attached below.
+        2. IF "LIVE WEB SEARCH RESULTS" exist: You MUST use them to answer the user. Cite them as [Title](Link).
+        3. IF results are missing or irrelevant: Use your internal knowledge but mention you couldn't find live info.
+        4. Answer in the same language as the user (Vietnamese/English).
         
         ${injectionData}`
     };
 
-    finalMessages.unshift(systemInstruction);
+    // Ensure system prompt is first
+    finalMessages.unshift(systemPrompt);
 
-    const modelRes = await callOpenRouterChat(config.model, config.key, finalMessages, 2000).catch(err => {
+    const modelRes = await callOpenRouterChat(config.model, config.key, finalMessages, 3000).catch(err => {
         debug.model_error = String(err);
         return null;
     });
 
-    const answer = modelRes?.choices?.[0]?.message?.content || null;
+    const answer = modelRes?.choices?.[0]?.message?.content || 'Error: No response from model.';
 
     return new Response(JSON.stringify({
       content: answer,
       toolUsed,
-      debug
+      debug // Check this in your frontend console if it fails again!
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err) {
