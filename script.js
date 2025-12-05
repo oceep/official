@@ -1,9 +1,10 @@
-// script.js - PHIÊN BẢN ĐẦY ĐỦ & ĐÃ SỬA LỖI (PATCHED)
-// Bao gồm: Security, Token, Themes, Multi-lang, Model Selector, Chat History, File Upload, MathJax, Source Pills.
-// ĐÃ FIX: randomPrompts, updateTokenUI, API Logic, Math Safety.
+// script.js - PHIÊN BẢN FULL (SYNC LANGUAGE LOGIC)
+// Bao gồm: Security, Token, Themes, Multi-lang, Model Selector, Chat History, File Upload, MathJax.
+// ĐÃ FIX: Random Prompts, API, TokenUI.
+// ĐÃ CẬP NHẬT: AI tuân thủ tuyệt đối ngôn ngữ được chọn trong cài đặt.
 
 //=====================================================================//
-// 1. CẤU HÌNH & KHỞI TẠO CƠ BẢN                                     //
+// 1. CẤU HÌNH & DỮ LIỆU BAN ĐẦU                                     //
 //=====================================================================//
 
 // Kiểm tra khóa bảo mật
@@ -12,9 +13,7 @@ try {
         window.location.href = 'verify.html';
         throw new Error("App is locked requiring verification."); 
     }
-} catch (e) {
-    console.error("Security check error:", e);
-}
+} catch (e) { console.error("Security check error:", e); }
 
 // Helper: Copy Code
 window.copyToClipboard = function(btn) {
@@ -22,11 +21,9 @@ window.copyToClipboard = function(btn) {
         const header = btn.closest('.code-box-header');
         if (!header) return;
         const contentDiv = header.nextElementSibling;
-        if (!contentDiv) return;
-        const codeElement = contentDiv.querySelector('code');
-        if (!codeElement) return;
+        const codeText = contentDiv.querySelector('code')?.innerText;
+        if (!codeText) return;
 
-        const codeText = codeElement.innerText;
         navigator.clipboard.writeText(codeText).then(() => {
             const originalHTML = btn.innerHTML;
             btn.innerHTML = `<span class="text-green-400 font-bold">Copied!</span>`;
@@ -44,23 +41,47 @@ const tokenConfig = {
     TOKEN_REGEN_AMOUNT: 1,        
 };
 
-// Hệ thống Prompt (Training)
-const SYSTEM_PROMPTS = {
-    assistant: `You are Oceep, a smart and helpful AI Assistant.
-    CRITICAL INSTRUCTIONS:
-    1. LANGUAGE: Detect the language used by the user. You MUST answer in the EXACT SAME language.
-    2. STYLE: Be CONCISE, SUCCINCT, and COMPLETE. Avoid unnecessary fluff.
-    3. CITATION: If you use search results, cite them as **[Source Name](URL)**.`,
-
-    tutor: `You are Oceep, acting as an expert Tutor/Teacher.
-    CRITICAL INSTRUCTIONS:
-    1. LANGUAGE: Answer in the EXACT SAME language as the user.
-    2. GOAL: Do not just give the final answer. Explain the "Why" and "How".
-    3. STYLE: Be educational, encouraging, but concise. Break down complex topics.`
+// --- [LOGIC MỚI] BỘ LUẬT NGÔN NGỮ (LANGUAGE ENFORCEMENT RULES) ---
+const LANGUAGE_RULES = {
+    vi: "QUAN TRỌNG: Bạn PHẢI trả lời câu hỏi hoàn toàn bằng TIẾNG VIỆT. Không sử dụng tiếng Anh trừ khi được yêu cầu dịch thuật.",
+    en: "IMPORTANT: You MUST answer the query entirely in ENGLISH. Do not use other languages unless asked to translate.",
+    zh: "IMPORTANT: You MUST answer entirely in CHINESE (Simplified).",
+    ja: "IMPORTANT: You MUST answer entirely in JAPANESE.",
+    fr: "IMPORTANT: You MUST answer entirely in FRENCH.",
+    es: "IMPORTANT: You MUST answer entirely in SPANISH.",
+    hi: "IMPORTANT: You MUST answer entirely in HINDI.",
+    it: "IMPORTANT: You MUST answer entirely in ITALIAN."
 };
 
+// Hàm tạo System Prompt động dựa trên chế độ và ngôn ngữ hiện tại
+function generateSystemPrompt(mode, langCode) {
+    // Lấy luật ngôn ngữ (mặc định là tiếng Anh nếu không tìm thấy mã)
+    const langRule = LANGUAGE_RULES[langCode] || LANGUAGE_RULES['en'];
+
+    if (mode === 'tutor') {
+        return `You are Oceep, an expert Tutor/Teacher.
+        
+        *** STRICT LANGUAGE REQUIREMENT ***
+        ${langRule}
+        
+        *** INSTRUCTIONS ***
+        1. METHOD: Do not just give the final answer. Explain the "Why" and "How".
+        2. STYLE: Be educational, encouraging, but concise. Break down complex topics into simple steps.`;
+    } else {
+        // Default Assistant Mode
+        return `You are Oceep, a smart and helpful AI Assistant.
+        
+        *** STRICT LANGUAGE REQUIREMENT ***
+        ${langRule}
+        
+        *** INSTRUCTIONS ***
+        1. STYLE: Be CONCISE, SUCCINCT, and COMPLETE. Avoid unnecessary fluff.
+        2. CITATION: If you use search results, cite them as **[Source Name](URL)**.`;
+    }
+}
+
 //=====================================================================//
-// 2. DOM ELEMENTS & STATE MANAGEMENT & DATA                         //
+// 2. DOM ELEMENTS & STATE MANAGEMENT                                //
 //=====================================================================//
 
 const getEl = (id) => document.getElementById(id);
@@ -147,7 +168,7 @@ try {
 } catch (e) { currentModel = null; }
 if (!currentModel) currentModel = { model: 'Mini', version: '' };
 
-// Từ điển
+// Từ điển UI
 const translations = {
     vi: {
         sidebarHeader: "Lịch sử Chat", newChatTitle: "Chat mới", messagePlaceholder: "Bạn muốn biết gì?", aiTypingPlaceholder: "AI đang trả lời...", outOfTokensPlaceholder: "Hết lượt.", sendButton: "Gửi", stopButton: "Dừng", modelButtonDefault: "Expert", randomButton: "Ngẫu nhiên", videoButton: "Tạo Video", learnButton: "Học Tập", footerText: "AI có thể mắc lỗi. Hãy kiểm tra thông tin quan trọng.", themeModalTitle: "Chọn Giao Diện", languageModalTitle: "Chọn Ngôn Ngữ", themeDark: "Tối", themeLight: "Sáng", themeOcean: "Biển", modalClose: "Đóng", newChatHistory: "Cuộc trò chuyện mới", greetingMorning: "Chào buổi sáng", greetingNoon: "Chào buổi trưa", greetingAfternoon: "Chào buổi chiều", greetingEvening: "Chào buổi tối", errorPrefix: "Đã có lỗi xảy ra", comingSoon: "Sắp có", comingSoonTitle: "Sắp có...", comingSoonText: "Tính năng này đang được phát triển.", langTooltip: "Đổi Ngôn Ngữ", themeTooltip: "Đổi Giao Diện", historyTooltip: "Lịch Sử Chat", newChatTooltip: "Chat Mới", modelMiniDesc: "Nhanh.", modelSmartDesc: "Thông minh.", modelNerdDesc: "Chuyên sâu."
@@ -156,9 +177,10 @@ const translations = {
         sidebarHeader: "History", newChatTitle: "New Chat", messagePlaceholder: "Ask me anything...", aiTypingPlaceholder: "AI replying...", outOfTokensPlaceholder: "No tokens.", sendButton: "Send", stopButton: "Stop", modelButtonDefault: "Expert", randomButton: "Random", videoButton: "Video", learnButton: "Learn", footerText: "AI may err.", themeModalTitle: "Theme", languageModalTitle: "Language", themeDark: "Dark", themeLight: "Light", themeOcean: "Ocean", modalClose: "Close", newChatHistory: "New Chat", greetingMorning: "Good morning", greetingNoon: "Good afternoon", greetingAfternoon: "Good afternoon", greetingEvening: "Good evening", errorPrefix: "Error", comingSoon: "Coming Soon", comingSoonTitle: "Soon...", comingSoonText: "Dev in progress.", langTooltip: "Language", themeTooltip: "Theme", historyTooltip: "History", newChatTooltip: "New", modelMiniDesc: "Fast.", modelSmartDesc: "Smart.", modelNerdDesc: "Deep."
     },
 };
+// Fallback languages to English UI
 ['zh', 'hi', 'es', 'fr', 'ja', 'it'].forEach(l => { if(!translations[l]) translations[l] = translations['en']; });
 
-// --- [FIX 1] RANDOM PROMPTS DATA ---
+// Random Prompts Data
 const randomPrompts = {
     vi: [
         "Giải thích lượng tử cho học sinh lớp 5",
@@ -207,7 +229,6 @@ function initializeApp() {
     startNewChat(); 
 }
 
-// --- [FIX 2] UPDATE TOKEN UI FUNCTION ---
 function updateTokenUI() {
     if (tokenConfig.IS_INFINITE) {
         if (tokenInputsContainer) tokenInputsContainer.classList.add('hidden');
@@ -307,7 +328,7 @@ function applyTheme(theme) {
 }
 
 function switchLanguage(lang) {
-    currentLang = lang;
+    currentLang = lang; // Cập nhật biến toàn cục
     const t = translations[lang] || translations['vi'];
     const setText = (el, txt) => { if(el) el.textContent = txt; };
     
@@ -344,7 +365,7 @@ function switchLanguage(lang) {
     updateModelButtonText();
     setGreeting();
     renderHistoryList();
-    updateTokenUI(); // Now this function exists!
+    updateTokenUI();
 }
 
 function setGreeting() {
@@ -472,7 +493,7 @@ function updateRandomButtonVisibility() {
     }
 }
 
-// FORMATTER (Source Pill Logic)
+// FORMATTER
 function formatAIResponse(text) {
     if (!text) return '';
     const codeBlocks = [];
@@ -543,7 +564,7 @@ function createMessageElement(messageContent, sender) {
     return row;
 }
 
-// --- [FIX 4] MATH RENDER SAFETY ---
+// Math Render Safety
 function renderMath(element) {
     if (typeof window.renderMathInElement === 'function') {
         window.renderMathInElement(element, {
@@ -573,7 +594,7 @@ async function typeWriterEffect(text, element) {
     element.innerHTML = formatAIResponse(text);
 }
 
-// --- [FIX 3] API STREAMING (URL & ERROR HANDLING) ---
+// API STREAMING
 async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
     const API_URL = isLocal ? '/api/chat' : '/api/handler';
@@ -604,7 +625,6 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
         }
 
         const data = await response.json();
-        // Fallback checks
         const fullText = data.content || (data.choices && data.choices[0]?.message?.content) || ""; 
         
         await typeWriterEffect(fullText, aiMessageEl.firstChild);
@@ -698,8 +718,8 @@ if(chatFormEl) {
         try {
             const modelToUse = (currentModel && currentModel.model) ? currentModel.model : 'Mini';
             
-            // --- INJECT TRAINING PROMPT (SYSTEM INSTRUCTION) ---
-            const systemContent = isTutorMode ? SYSTEM_PROMPTS.tutor : SYSTEM_PROMPTS.assistant;
+            // --- [LOGIC MỚI] SỬ DỤNG HÀM TẠO PROMPT ĐỘNG ---
+            const systemContent = generateSystemPrompt(isTutorMode ? 'tutor' : 'assistant', currentLang);
             const messagesPayload = [
                 { role: 'system', content: systemContent },
                 ...conversationHistory
@@ -753,10 +773,8 @@ function consumeToken() {
 // Other UI Events
 if(stopButton) stopButton.onclick = () => { if (abortController) abortController.abort(); };
 
-// --- [FIX 1] Random Prompt Handler ---
 if(randomPromptBtn) randomPromptBtn.onclick = () => {
     if (isRandomPromptUsedInSession) return;
-    // Sử dụng biến randomPrompts đã được định nghĩa ở trên
     const prompts = randomPrompts[currentLang] || randomPrompts['vi'];
     messageInput.value = prompts[Math.floor(Math.random() * prompts.length)];
     chatFormEl.dispatchEvent(new Event('submit'));
