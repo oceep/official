@@ -4,7 +4,6 @@
 // 1. LOGIC BẢO MẬT & KHỞI TẠO CƠ BẢN                                  //
 //=====================================================================//
 
-// Kiểm tra khóa bảo mật
 try {
     if (localStorage.getItem('isLocked') === 'true') {
         window.location.href = 'verify.html';
@@ -17,7 +16,6 @@ try {
 // Helper: Copy Code
 window.copyToClipboard = function(btn) {
     try {
-        // Tìm element code dựa trên cấu trúc HTML tạo ra bởi formatAIResponse
         const header = btn.closest('.code-box-header');
         if (!header) return;
         const contentDiv = header.nextElementSibling;
@@ -36,11 +34,11 @@ window.copyToClipboard = function(btn) {
 
 // Cấu hình Token
 const tokenConfig = {
-    IS_INFINITE: true,          
-    MAX_TOKENS: 50,             
-    TOKEN_COST_PER_MESSAGE: 1,  
+    IS_INFINITE: true,           
+    MAX_TOKENS: 50,              
+    TOKEN_COST_PER_MESSAGE: 1,   
     TOKEN_REGEN_INTERVAL_MINUTES: 5, 
-    TOKEN_REGEN_AMOUNT: 1,      
+    TOKEN_REGEN_AMOUNT: 1,       
 };
 
 //=====================================================================//
@@ -76,7 +74,6 @@ const textElements = {
     newChatTooltip: getEl('new-chat-tooltip'),
 };
 
-// Các nút & Modal
 const themeMenuButton = getEl('theme-menu-button');
 const themeModal = getEl('theme-modal');
 const themeOptionButtons = document.querySelectorAll('.theme-option');
@@ -117,7 +114,6 @@ let conversationHistory = [];
 let chatHistories = {};
 let currentChatId = null;
 
-// Khởi tạo Model
 let currentModel;
 try {
     currentModel = JSON.parse(localStorage.getItem('currentModel'));
@@ -132,7 +128,6 @@ const translations = {
         sidebarHeader: "Chat History", newChatTitle: "New Chat", messagePlaceholder: "What do you want to know?", aiTypingPlaceholder: "AI is replying...", outOfTokensPlaceholder: "You're out of tokens.", sendButton: "Send", stopButton: "Stop", modelButtonDefault: "Expert", modelButtonPrefix: "Model", randomButton: "Random", videoButton: "Create Video", learnButton: "Study", footerText: "AI can make mistakes. Check important info.", themeModalTitle: "Choose Theme", languageModalTitle: "Select Language", themeDark: "Dark", themeLight: "Light", themeOcean: "Ocean", modalClose: "Close", newChatHistory: "New Conversation", greetingMorning: "Good morning", greetingNoon: "Good afternoon", greetingAfternoon: "Good afternoon", greetingEvening: "Good evening", errorPrefix: "An error occurred", comingSoon: "Coming Soon", comingSoonTitle: "Coming Soon...", comingSoonText: "Under development.", langTooltip: "Switch Language", themeTooltip: "Change Theme", historyTooltip: "Chat History", newChatTooltip: "New Chat", modelMiniDesc: "Fast and efficient.", modelSmartDesc: "Balanced speed and intelligence.", modelNerdDesc: "Powerful model for complex answers."
     },
 };
-// Fallback languages
 ['zh', 'hi', 'es', 'fr', 'ja', 'it'].forEach(lang => { if(!translations[lang]) translations[lang] = translations['en']; });
 
 const themeColors = {
@@ -195,11 +190,7 @@ const themeColors = {
 
 function escapeHTML(str) {
     if (!str) return '';
-    return str.replace(/&/g, "&amp;")
-              .replace(/</g, "&lt;")
-              .replace(/>/g, "&gt;")
-              .replace(/"/g, "&quot;")
-              .replace(/'/g, "&#039;");
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
 function saveStateToLocalStorage() {
@@ -227,7 +218,6 @@ function initializeApp() {
 
 function applyTheme(theme) {
     if (!themeColors[theme]) theme = 'dark';
-    
     body.className = "flex flex-col h-screen overflow-hidden transition-colors duration-500";
     backgroundContainer.className = "fixed inset-0 -z-10 transition-all duration-500 bg-cover bg-center";
     backgroundContainer.style.backgroundImage = '';
@@ -251,9 +241,8 @@ function applyTheme(theme) {
     body.classList.remove(...allConfigs.map(c => c.text));
     body.classList.add(config.text);
 
-    const allLogoColors = allConfigs.map(c => c.logo);
     if(textElements.logoText) {
-        textElements.logoText.classList.remove(...allLogoColors);
+        textElements.logoText.classList.remove(...allConfigs.map(c => c.logo));
         textElements.logoText.classList.add(config.logo);
     }
 
@@ -279,17 +268,15 @@ function applyTheme(theme) {
         learnBtn ? learnBtn.querySelector('svg') : null, 
         uploadFileBtn ? uploadFileBtn.querySelector('svg') : null
     ];
-    const allIconColors = allConfigs.map(c => c.iconColor);
     themeableIconEls.forEach(el => {
         if (el) {
-            el.classList.remove(...allIconColors);
+            el.classList.remove(...allConfigs.map(c => c.iconColor));
             el.classList.add(config.iconColor);
         }
     });
     
-    const allInputColors = allConfigs.flatMap(c => c.inputColor || []).flat();
     if(messageInput) {
-        messageInput.classList.remove(...allInputColors);
+        messageInput.classList.remove(...allConfigs.flatMap(c => c.inputColor || []).flat());
         messageInput.classList.add(...(config.inputColor || []));
     }
 
@@ -332,7 +319,6 @@ function applyTheme(theme) {
 function switchLanguage(lang) {
     currentLang = lang;
     const t = translations[lang] || translations['vi'];
-
     const setText = (el, txt) => { if(el) el.textContent = txt; };
     const setAttr = (el, attr, txt) => { if(el) el[attr] = txt; };
 
@@ -358,7 +344,6 @@ function switchLanguage(lang) {
     setText(textElements.newChatTooltip, t.newChatTooltip);
 
     if(langSwitchBtn) langSwitchBtn.textContent = lang.toUpperCase();
-
     document.documentElement.lang = lang;
     localStorage.setItem('language', lang);
     
@@ -387,7 +372,6 @@ function setGreeting() {
     mainTitle.textContent = greeting;
 }
 
-// --- UI HELPERS ---
 let isModalAnimating = false;
 function showModal(modal, show) {
     if(!modal) return;
@@ -412,7 +396,6 @@ function showModal(modal, show) {
     }, 300);
 }
 
-// Events
 if(themeMenuButton) themeMenuButton.addEventListener('click', () => showModal(themeModal, true));
 if(textElements.closeModalButton) textElements.closeModalButton.addEventListener('click', () => showModal(themeModal, false));
 if(themeModal) themeModal.addEventListener('click', (e) => { if(e.target === themeModal) showModal(themeModal, false); });
@@ -442,7 +425,6 @@ if(sidebarToggle && sidebar) sidebarToggle.addEventListener('click', () => {
     sidebar.classList.toggle('hidden');
 });
 
-// --- MODEL SELECTION ---
 function updateModelButtonText() {
     const t = translations[currentLang] || translations['vi'];
     if (!textElements.modelBtnText) return;
@@ -541,14 +523,10 @@ document.addEventListener('click', (e) => {
 // 4. CHAT LOGIC & RENDER                                              //
 //=====================================================================//
 
-// Logic phân loại Search (Cập nhật theo danh sách mới)
 function shouldShowSearchStatus(text) {
     if (!text) return false;
-    // Red list - KHÔNG search
     const skipRegex = /(giải toán|code|lập trình|javascript|python|html|css|fix bug|lỗi|logic|ngữ pháp|tiếng anh|viết văn|viết mail|văn mẫu|kiến thức chung|trái đất|mặt trời|định nghĩa|khái niệm|công thức|tính toán|giai toan|lap trinh|ngu phap|viet van|van mau|kien thuc chung|trai dat|mat troi|dinh nghia|khai niem|cong thuc|tinh toan)/i;
-    // Green list - CẦN search/API
     const mustSearchRegex = /(địa chỉ|quán|nhà hàng|ở đâu|gần đây|thời tiết|hôm nay|ngày mai|tin tức|sự kiện|giá|tỷ giá|vàng|crypto|coin|bitcoin|eth|giờ mở cửa|giao thông|kẹt xe|dia chi|quan|nha hang|o dau|gan day|thoi tiet|hom nay|ngay mai|tin tuc|su kien|gia|ty gia|vang|gio mo cua|giao thong|ket xe|hiện tại|bây giờ|hien tai|bay gio)/i;
-
     if (skipRegex.test(text)) return false;
     return mustSearchRegex.test(text);
 }
@@ -585,6 +563,7 @@ function updateRandomButtonVisibility() {
     }
 }
 
+// HÀM FORMAT AI RESPONSE (ĐÃ CẬP NHẬT ĐỂ HIỂN THỊ SOURCE PILL)
 function formatAIResponse(text) {
     if (!text) return '';
     const codeBlocks = [];
@@ -594,12 +573,17 @@ function formatAIResponse(text) {
         return `__CODE_BLOCK_${index}__`; 
     });
 
+    // --- SOURCE PILL REGEX ---
+    const sourceRegex = /\*\*\[([^\]]+)\]\(([^)]+)\)\*\*/g;
+    processedText = processedText.replace(sourceRegex, (match, name, url) => {
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="source-pill" title="Nguồn: ${name}">${name}</a>`;
+    });
+    // -------------------------
+
     processedText = processedText.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-blue-400">$1</strong>');
     processedText = processedText.replace(/^##\s+(.*)$/gm, '<h2 class="text-xl font-bold mt-4 mb-2 border-b border-gray-500/50 pb-1">$1</h2>');
     processedText = processedText.replace(/^###\s+(.*)$/gm, '<h3 class="text-lg font-bold mt-3 mb-1">$1</h3>');
     
-    // Xử lý Table (Markdown Tables) - SAFE VERSION
-    // Bắt đầu bằng | ... | xuống dòng | -:- |
     const tableRegex = /\|(.+)\|\n\|([-:| ]+)\|\n((?:\|.*\|\n?)*)/g;
     processedText = processedText.replace(tableRegex, (match, header, separator, body) => {
         try {
@@ -615,7 +599,7 @@ function formatAIResponse(text) {
             return `<div class="overflow-x-auto my-3 rounded-lg shadow-lg"><table class="min-w-full bg-gray-800 border-collapse text-sm"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`;
         } catch (e) {
             console.error("Table parsing error", e);
-            return match; // Return original markdown if parsing fails
+            return match; 
         }
     });
 
@@ -708,7 +692,6 @@ async function typeWriterEffect(text, element) {
 
     for (const word of words) {
         currentText += word;
-        // Optimization: Only format if necessary, but here we do it for correctness
         element.innerHTML = formatAIResponse(currentText);
         if(chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
         await new Promise(r => setTimeout(r, speed));
@@ -716,7 +699,6 @@ async function typeWriterEffect(text, element) {
     element.innerHTML = formatAIResponse(text);
 }
 
-// API STREAMING
 async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const isLocal = window.location.hostname === 'localhost' || 
                     window.location.hostname === '127.0.0.1' ||
@@ -739,7 +721,6 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
         }
 
         const data = await response.json();
-        // Standard check instead of Optional Chaining for compat
         const fullText = (data && data.content) ? data.content : ""; 
         
         await typeWriterEffect(fullText, aiMessageEl.firstChild);
@@ -755,15 +736,12 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     }
 }
 
-// Submit Handler
 if(chatFormEl) {
     chatFormEl.addEventListener('submit', async function(event) {
         event.preventDefault();
         const message = messageInput.value.trim();
         if (!message && !stagedFile) return;
-
-        if (!consumeToken()) return;
-
+        
         const initialView = getEl('initial-view');
         const chatContainer = getEl('chat-container');
         const mainContent = getEl('mainContent');
@@ -806,7 +784,6 @@ if(chatFormEl) {
         aiMessageEl.firstChild.classList.add('streaming'); 
         aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse">AI đang trả lời...</span>';
 
-        // Search Status Logic
         const searchStatusTimer = setTimeout(() => {
             if (shouldShowSearchStatus(message)) {
                 aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse text-blue-400">Đang tìm kiếm thông tin...</span>';
@@ -847,7 +824,7 @@ if(chatFormEl) {
     });
 }
 
-// Token & Inputs (Không đổi logic)
+// Token & Inputs (Giữ nguyên)
 const currentTokenInput = getEl('current-token-input');
 const maxTokenInput = getEl('max-token-input');
 const tokenInputsContainer = getEl('token-inputs-container');
@@ -932,18 +909,6 @@ function updateTokenUI() {
     } else {
         if(messageInput) messageInput.placeholder = t.messagePlaceholder;
     }
-}
-
-function consumeToken() {
-    if (tokenConfig.IS_INFINITE) return true;
-    let currentTokens = parseInt(localStorage.getItem('userTokens') || '0');
-    if (currentTokens >= tokenConfig.TOKEN_COST_PER_MESSAGE) {
-        currentTokens -= tokenConfig.TOKEN_COST_PER_MESSAGE;
-        localStorage.setItem('userTokens', currentTokens);
-        updateTokenUI();
-        return true;
-    }
-    return false;
 }
 
 // Other UI Events
@@ -1240,6 +1205,50 @@ function handleUpdateLog() {
         showModal(updateLogModal, false);
     };
 
-    // FIXED: Event listener was missing
     if(closeUpdateLogBtn) closeUpdateLogBtn.addEventListener('click', closeAndSavePreference);
 }
+
+//=====================================================================//
+// 6. INJECT CSS FOR SOURCE PILLS (Auto-run)                           //
+//=====================================================================//
+(function addSourcePillStyles() {
+    const style = document.createElement('style');
+    style.innerHTML = `
+        .source-pill {
+            display: inline-flex;
+            align-items: center;
+            background-color: #2f3336;
+            color: #e0e0e0 !important;
+            text-decoration: none;
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 2px 10px;
+            border-radius: 99px;
+            margin: 0 2px 0 6px;
+            vertical-align: middle;
+            border: 1px solid #444;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            opacity: 0.9;
+        }
+        .source-pill:hover {
+            background-color: #1d9bf0;
+            border-color: #1d9bf0;
+            color: white !important;
+            transform: translateY(-1px);
+            opacity: 1;
+            box-shadow: 0 2px 8px rgba(29, 155, 240, 0.3);
+        }
+        body.text-black .source-pill {
+            background-color: #eef1f5;
+            color: #333 !important;
+            border-color: #cbd5e1;
+        }
+        body.text-black .source-pill:hover {
+            background-color: #2563eb;
+            color: white !important;
+            border-color: #2563eb;
+        }
+    `;
+    document.head.appendChild(style);
+})();
