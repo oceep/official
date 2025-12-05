@@ -11,7 +11,8 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const EXA_API_URL = 'https://api.exa.ai/search';
 const DECISION_MODEL = 'arcee-ai/trinity-mini:free'; 
 
-// ----------------------------...
+// ----------------------------
+// Helpers
 // ----------------------------
 async function safeFetch(url, opts = {}, ms = 15000) {
   const controller = new AbortController();
@@ -40,12 +41,9 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
   const lower = userPrompt.toLowerCase();
 
   // --- RULE 1: NÉ SEARCH (SKIP) ---
-  // (Code, Dịch, Tính toán, Viết lách)
   const skipTriggers = [
-      // Có dấu
       'viết', 'write', 'dịch', 'translate', 'code', 'lập trình', 'tính', 'calculate', 
       'giải', 'solve', 'tạo', 'create', 'sáng tác', 'compose', 'check', 'kiểm tra lỗi',
-      // Không dấu
       'viet', 'dich', 'lap trinh', 'tinh', 'giai', 'tao', 'sang tac', 'kiem tra', 'sua loi'
   ];
   
@@ -55,14 +53,10 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
   }
 
   // --- RULE 2: ÉP SEARCH (FORCE) ---
-  // (Địa điểm, Tin tức, Giá cả, Sự kiện)
   const forceTriggers = [
-      // Tiếng Anh
       'address', 'location', 'weather', 'price', 'news', 'latest', 'who is', 'what is', 'review',
-      // Có dấu
       'địa chỉ', 'ở đâu', 'chỗ nào', 'thời tiết', 'giá', 'tin tức', 'sự kiện', 'hôm nay', 
       'mới nhất', 'là gì', 'bao nhiêu', 'tỷ giá', 'kết quả', 'lịch thi đấu',
-      // KHÔNG DẤU (Mới thêm)
       'dia chi', 'o dau', 'cho nao', 'thoi tiet', 'gia', 'tin tuc', 'su kien', 'hom nay', 'hnay',
       'moi nhat', 'la gi', 'bao nhieu', 'ty gia', 'ket qua', 'lich thi dau', 'review'
   ];
@@ -167,10 +161,20 @@ export async function onRequestPost(context) {
     const { modelName = 'Smart', messages = [] } = body;
     const debug = { steps: [] };
 
+    // --- UPDATED MODEL CONFIG ---
     const apiConfig = {
-      Mini: { key: env.MINI_API_KEY, model: 'qwen/qwen3-4b:free' }, 
-      Smart: { key: env.SMART_API_KEY, model: 'mistralai/mistral-small-3.1-24b-instruct:free' }, 
-      Nerd: { key: env.NERD_API_KEY, model: 'amazon/nova-2-lite-v1:free' }
+      Mini: { 
+          key: env.MINI_API_KEY, 
+          model: 'qwen/qwen3-4b:free' 
+      },
+      Smart: { 
+          key: env.SMART_API_KEY, 
+          model: 'mistralai/mistral-small-3.1-24b-instruct:free' 
+      },
+      Nerd: { 
+          key: env.NERD_API_KEY, 
+          model: 'z-ai/glm-4.5-air:free' // <-- Đã đổi sang GLM-4.5-Air
+      }
     };
 
     const config = apiConfig[modelName];
@@ -180,7 +184,7 @@ export async function onRequestPost(context) {
     let toolUsed = 'Internal Knowledge';
     let searchContext = '';
 
-    // --- B1: PHÂN TÍCH (Smart Router - Updated) ---
+    // --- B1: PHÂN TÍCH ---
     const decisionKey = env.DECIDE_API_KEY || env.SMART_API_KEY;
     const analysis = await analyzeRequest(lastMsg, decisionKey, debug.steps);
 
