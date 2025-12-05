@@ -1,19 +1,18 @@
 // functions/api/handler.js
 
 /**
- * Full handler.js — "Search Agent" Architecture
+ * handler.js — "LLM Web Search" (OpenWebUI Style)
+ * * WORKFLOW:
+ * 1. QUERY GEN (The Mind): Uses 'arcee-ai/trinity-mini' to Generate the perfect search query.
+ * 2. SEARCH (The Hands): 
+ * - Tries ScraperX (API Key).
+ * - IF FAILS: Falls back to DuckDuckGo Lite (Free, HTML-only).
+ * 3. ANSWER (The Mouth): RAG response using the found data.
  *
- * WORKFLOW:
- * 1. THE MIND (Decision): Uses 'arcee-ai/trinity-mini:free' with DECIDE_API_KEY.
- * - Prompt: "Does this need search? True/False"
- * - Fallback: If model fails/timeouts, DEFAULT TO TRUE (Search).
- * 2. THE HANDS (Search): If True, uses ScraperX (SCRAPERX_API_KEY).
- * 3. THE MOUTH (Answer): Uses the user's selected model (Smart/Mini) to answer.
- *
- * REQUIRED WORKER VARIABLES:
- * - DECIDE_API_KEY   (For Arcee Trinity)
- * - SCRAPERX_API_KEY (For ScraperX)
- * - MINI_API_KEY, SMART_API_KEY, NERD_API_KEY (For Chat)
+ * REQUIRED VARS:
+ * - DECIDE_API_KEY   (for Trinity - Query Gen)
+ * - SCRAPERX_API_KEY (for ScraperX)
+ * - MINI_API_KEY, SMART_API_KEY, etc.
  */
 
 const corsHeaders = {
@@ -23,14 +22,9 @@ const corsHeaders = {
 };
 
 // --- CONFIGURATION ---
-const DEFAULT_SEARCH_COUNT = 5;
-const SEARCH_TIMEOUT_MS = 20000; // 20s (Scrapers can be slow)
-const DECISION_TIMEOUT_MS = 4000; // 4s (Decision must be fast)
+const SEARCH_TIMEOUT_MS = 15000;
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const DECISION_MODEL = 'arcee-ai/trinity-mini:free';
-
-// !IMPORTANT: Check if ScraperX uses 'api.scraperx.com' or another URL.
-// Standard pattern for scraper APIs is usually: https://api.scraperx.com/
+const DECISION_MODEL = 'arcee-ai/trinity-mini:free'; 
 const SCRAPERX_ENDPOINT = 'https://api.scraperx.com/'; 
 
 // ----------------------------
@@ -55,148 +49,141 @@ async function safeFetch(url, opts = {}, ms = 10000) {
 }
 
 // ----------------------------
-// 1) DECISION LAYER ("THE MIND")
+// 1) QUERY GENERATOR ("LLM Web Search" Logic)
 // ----------------------------
-async function decideIfSearchNeeded(query, apiKey, debugSteps) {
-  if (!apiKey) {
-    debugSteps.push({ decision: 'no_key_defaulting_true' });
-    return true; // No key? Default to Search.
-  }
+async function generateSearchQuery(userPrompt, apiKey, debugSteps) {
+  if (!apiKey) return { needed: true, query: userPrompt }; // Fallback
 
   try {
-    // Strict prompt to force a boolean answer
-    const systemPrompt = `You are a Search Decision Bot. 
-    Analyze the user Query.
-    - If it asks for real-time info (News, Weather, Sports, Stock, "Who is", Events 2024-2025), output "True".
-    - If it is static (Math, Code, Translate, Greeting), output "False".
-    - Output ONLY "True" or "False".`;
+    // This prompt mimics OpenWebUI's query generation
+    const systemPrompt = `You are a Search Optimizer.
+    Analyze the user's request.
+    1. DECIDE: Does this need external info? (True/False)
+    2. QUERY: If True, write the BEST Google search query for it. If False, leave empty.
+    
+    RETURN JSON ONLY:
+    { "needed": boolean, "query": "string" }`;
 
     const payload = {
       model: DECISION_MODEL,
+      response_format: { type: "json_object" }, // Try to force JSON
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: query }
+        { role: 'user', content: userPrompt }
       ],
-      max_tokens: 5,
-      temperature: 0.0 // Strict
+      max_tokens: 50,
+      temperature: 0.1
     };
     
     const res = await safeFetch(OPENROUTER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(payload)
-    }, DECISION_TIMEOUT_MS);
+    }, 5000);
     
-    if (!res.ok) {
-        debugSteps.push({ decision_error: `status_${res.status}` });
-        return true; // API Error? Default to Search.
+    if (!res.ok) throw new Error('Query Gen Failed');
+    
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content || '{}';
+    
+    // Attempt parse
+    let parsed;
+    try {
+        parsed = JSON.parse(content);
+    } catch (e) {
+        // Fallback if model output raw text
+        const needed = content.toLowerCase().includes('true');
+        parsed = { needed, query: userPrompt };
     }
 
-    const data = await res.json();
-    const answer = data?.choices?.[0]?.message?.content?.trim() || '';
-    debugSteps.push({ decision_raw_output: answer });
-
-    if (answer.toLowerCase().includes('true')) return true;
-    if (answer.toLowerCase().includes('false')) return false;
-    
-    // If model says something weird ("I think so"), default to True.
-    return true; 
+    debugSteps.push({ step: 'query_gen', output: parsed });
+    return parsed;
 
   } catch (e) {
-    debugSteps.push({ decision_exception: String(e) });
-    return true; // Exception? Default to Search.
+    debugSteps.push({ query_gen_error: String(e) });
+    // Default to searching the raw prompt if generation fails
+    return { needed: true, query: userPrompt };
   }
 }
 
 // ----------------------------
-// 2) SEARCH LAYER (ScraperX)
+// 2) SEARCH LAYER (Dual Engine)
 // ----------------------------
-async function searchScraperX(query, apiKey, count = DEFAULT_SEARCH_COUNT, debugSteps) {
-  if (!apiKey) {
-    debugSteps.push({ search_error: 'missing_scraperx_key' });
-    return null;
-  }
 
-  const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=vi&gl=vn&num=${count + 2}`;
-  
-  // Construct API URL
+// A. DuckDuckGo Lite (Fallback - No Key Needed)
+async function searchDDGLite(query) {
+    try {
+        const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+        const res = await safeFetch(url, {
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                'Accept': 'text/html' 
+            }
+        }, 8000);
+        if (!res.ok) return null;
+        const html = await res.text();
+
+        // Simple Regex Scraping for DDG Lite
+        const results = [];
+        const regex = /<a class="result-link" href="(.*?)">(.*?)<\/a>[\s\S]*?<td class="result-snippet">(.*?)<\/td>/g;
+        let match;
+        while ((match = regex.exec(html)) !== null && results.length < 5) {
+            results.push({
+                link: match[1],
+                title: match[2].replace(/<[^>]+>/g, ''), // strip tags
+                snippet: match[3].replace(/<[^>]+>/g, '')
+            });
+        }
+        return results.length ? results : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// B. ScraperX (Primary)
+async function searchScraperX(query, apiKey, debugSteps) {
+  const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en&gl=us`;
   const apiUrl = new URL(SCRAPERX_ENDPOINT);
   apiUrl.searchParams.set('api_key', apiKey);
   apiUrl.searchParams.set('url', googleUrl);
-  apiUrl.searchParams.set('autoparse', 'true'); // Essential for JSON results
+  apiUrl.searchParams.set('autoparse', 'true');
 
   try {
-    const res = await safeFetch(apiUrl.toString(), {
-      method: 'GET',
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    }, SEARCH_TIMEOUT_MS);
-
+    const res = await safeFetch(apiUrl.toString(), { method: 'GET' }, SEARCH_TIMEOUT_MS);
     if (!res.ok) {
-        debugSteps.push({ search_status: res.status, msg: 'scraper_failed' });
+        debugSteps.push({ scraperx_fail: res.status });
         return null;
     }
-    
-    // Attempt to parse JSON
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      const data = await res.json();
-      
-      // Check for common Scraper API result shapes
-      const organic = data.organic_results || data.organic || data.results || [];
-      
-      if (Array.isArray(organic) && organic.length > 0) {
-         return organic.slice(0, count).map(r => ({
-           title: r.title || 'No Title',
-           link: r.link || r.url || '#',
-           snippet: r.snippet || r.description || ''
-         }));
-      } else {
-         debugSteps.push({ search_warning: 'json_returned_but_empty_array', data_preview: JSON.stringify(data).slice(0, 100) });
-      }
-    } else {
-        debugSteps.push({ search_warning: 'response_was_not_json', type: contentType });
-    }
-    return null;
-
+    const data = await res.json();
+    const results = data.organic_results || data.organic || data.results || [];
+    return results.length ? results.slice(0, 5) : null;
   } catch (e) {
-    debugSteps.push({ search_exception: String(e) });
+    debugSteps.push({ scraperx_error: String(e) });
     return null;
   }
 }
 
-// ----------------------------
-// 3) CHAT MODEL LAYER
-// ----------------------------
-async function callOpenRouterChat(model, apiKey, messages, max_tokens = 2000) {
-  if (!apiKey) throw new Error('Missing API key for model');
-  const payload = {
-    model,
-    messages,
-    max_tokens,
-    temperature: 0.7,
-    stream: false
-  };
-  const res = await safeFetch(OPENROUTER_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://oceep.pages.dev/',
-      'X-Title': 'Oceep'
-    },
-    body: JSON.stringify(payload)
-  }, 40000); 
-  
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(`Model call failed ${res.status} ${txt}`);
-  }
-  const data = await res.json();
-  return data;
+// Main Search Router
+async function performWebSearch(query, env, debugSteps) {
+    let results = null;
+
+    // 1. Try ScraperX
+    if (env.SCRAPERX_API_KEY) {
+        debugSteps.push({ action: 'trying_scraperx' });
+        results = await searchScraperX(query, env.SCRAPERX_API_KEY, debugSteps);
+        if (results) return { provider: 'ScraperX', results };
+    }
+
+    // 2. Fallback to DDG Lite
+    debugSteps.push({ action: 'trying_ddg_fallback' });
+    results = await searchDDGLite(query);
+    if (results) return { provider: 'DuckDuckGo (Lite)', results };
+
+    return null;
 }
 
 // ----------------------------
-// 4) MAIN WORKER
+// 3) MAIN WORKER
 // ----------------------------
 export async function onRequestOptions() {
   return new Response(null, { status: 204, headers: corsHeaders });
@@ -207,6 +194,7 @@ export async function onRequestPost(context) {
   try {
     const body = await request.json().catch(() => ({}));
     const { modelName = 'Smart', messages = [] } = body;
+    const debug = { steps: [] };
 
     // Config
     const apiConfig = {
@@ -216,71 +204,69 @@ export async function onRequestPost(context) {
     };
     const config = apiConfig[modelName];
     if (!config) return new Response(JSON.stringify({ error: 'Invalid modelName' }), { status: 400, headers: corsHeaders });
-    if (!messages.length) return new Response(JSON.stringify({ error: 'Empty messages' }), { status: 400, headers: corsHeaders });
 
     const lastMsg = messages[messages.length - 1].content || '';
     let toolUsed = 'Internal Knowledge';
     let injectionData = '';
-    const debug = { steps: [] };
 
-    // --- STEP 1: DECIDE ---
-    debug.steps.push({ step: '1_decision', model: DECISION_MODEL });
-    const needSearch = await decideIfSearchNeeded(lastMsg, env.DECIDE_API_KEY, debug.steps);
-    debug.steps.push({ decision_final: needSearch });
+    // --- STEP 1: GENERATE QUERY ---
+    // Use DECIDE key, or fall back to SMART key
+    const queryKey = env.DECIDE_API_KEY || env.SMART_API_KEY;
+    const decision = await generateSearchQuery(lastMsg, queryKey, debug.steps);
 
-    // --- STEP 2: SEARCH (If Needed) ---
-    if (needSearch) {
-      debug.steps.push({ step: '2_searching', provider: 'scraperx' });
-      
-      const searchResults = await searchScraperX(lastMsg, env.SCRAPERX_API_KEY, DEFAULT_SEARCH_COUNT, debug.steps);
-      
-      if (searchResults && searchResults.length > 0) {
-        toolUsed = 'WebSearch (ScraperX)';
-        const contextString = searchResults.map((item, idx) => 
-            `[${idx+1}] ${item.title}\nLINK: ${item.link}\nDESC: ${item.snippet}`
-        ).join('\n\n');
+    // --- STEP 2: EXECUTE SEARCH ---
+    if (decision.needed) {
+        const searchData = await performWebSearch(decision.query, env, debug.steps);
+        
+        if (searchData && searchData.results) {
+            toolUsed = `WebSearch (${searchData.provider})`;
+            
+            // Format for RAG
+            const context = searchData.results.map((r, i) => 
+                `[${i+1}] ${r.title}\nSource: ${r.link}\nSummary: ${r.snippet}`
+            ).join('\n\n');
 
-        injectionData = `\n\n[LIVE WEB SEARCH RESULTS]\n${contextString}\n[END RESULTS]\n\n`;
-      } else {
-        toolUsed = 'WebSearch (Empty/Failed)';
-        debug.steps.push({ msg: 'Search logic ran but returned no results.' });
-      }
-    } else {
-      debug.steps.push({ step: '2_skipped_search' });
+            injectionData = `\n\n=== LIVE SEARCH RESULTS (${searchData.provider}) ===\nQuery: "${decision.query}"\n\n${context}\n\n=== END RESULTS ===\n`;
+        } else {
+            toolUsed = 'WebSearch (Failed/No Results)';
+            debug.steps.push({ msg: 'All search providers failed' });
+        }
     }
 
     // --- STEP 3: ANSWER ---
     const finalMessages = [...messages];
-    
-    // Inject the Search Results into the System Prompt or the User Message
-    // Putting it in System Prompt is usually more reliable for instruction following.
     const systemPrompt = {
         role: 'system',
         content: `You are Oceep.
         
-        CRITICAL INSTRUCTION:
-        1. I have performed a live Google search for you. The results are attached below.
-        2. IF "LIVE WEB SEARCH RESULTS" exist: You MUST use them to answer the user. Cite them as [Title](Link).
-        3. IF results are missing or irrelevant: Use your internal knowledge but mention you couldn't find live info.
-        4. Answer in the same language as the user (Vietnamese/English).
+        INSTRUCTIONS:
+        1. Use the "LIVE SEARCH RESULTS" below to answer the user's question if present.
+        2. Cite sources as [1], [2], etc.
+        3. If results are missing, use your internal knowledge.
+        4. Always answer in the user's language.
         
         ${injectionData}`
     };
-
-    // Ensure system prompt is first
     finalMessages.unshift(systemPrompt);
 
-    const modelRes = await callOpenRouterChat(config.model, config.key, finalMessages, 3000).catch(err => {
-        debug.model_error = String(err);
-        return null;
-    });
+    const modelRes = await safeFetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.key}` },
+      body: JSON.stringify({
+          model: config.model,
+          messages: finalMessages,
+          max_tokens: 2000
+      })
+    }, 30000);
 
-    const answer = modelRes?.choices?.[0]?.message?.content || 'Error: No response from model.';
+    if (!modelRes.ok) throw new Error('Model API failed');
+    const data = await modelRes.json();
+    const answer = data?.choices?.[0]?.message?.content || '';
 
     return new Response(JSON.stringify({
       content: answer,
       toolUsed,
-      debug // Check this in your frontend console if it fails again!
+      debug
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err) {
