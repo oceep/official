@@ -1,12 +1,16 @@
 // functions/api/handler.js
 
 /**
- * handler.js — "Lite Search Agent" (Final Version)
+ * handler.js — "Brave Search Agent"
  *
  * WORKFLOW:
- * 1. THE MIND (Query Gen): Dùng 'arcee-ai/trinity-mini' (hoặc model nhỏ) để quyết định có search không.
- * 2. THE HANDS (Search): Dùng DuckDuckGo Lite (Miễn phí, HTML Parsing) để tìm tin tức.
- * 3. THE MOUTH (Answer): Dùng Model chính để trả lời dựa trên kết quả tìm được.
+ * 1. THE MIND (Query Gen): Uses 'arcee-ai/trinity-mini' to decide IF and WHAT to search.
+ * 2. THE HANDS (Search): Uses Brave Search (Public JSON Endpoint) for cleaner results.
+ * 3. THE MOUTH (Answer): Uses your Main Model to answer.
+ *
+ * REQUIRED VARS:
+ * - DECIDE_API_KEY (for Trinity)
+ * - MINI_API_KEY / SMART_API_KEY (for Chat)
  */
 
 const corsHeaders = {
@@ -15,10 +19,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Title',
 };
 
-// --- CẤU HÌNH ---
-const SEARCH_TIMEOUT_MS = 10000; // 10 giây cho search
+// --- CONFIGURATION ---
+const SEARCH_TIMEOUT_MS = 10000;
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const DECISION_MODEL = 'arcee-ai/trinity-mini:free'; // Model nhỏ, nhanh để tạo query
+const DECISION_MODEL = 'arcee-ai/trinity-mini:free'; 
 
 // ----------------------------
 // Helpers
@@ -45,13 +49,13 @@ async function safeFetch(url, opts = {}, ms = 10000) {
 // 1) QUERY GENERATOR ("The Mind")
 // ----------------------------
 async function generateSearchQuery(userPrompt, apiKey, debugSteps) {
-  if (!apiKey) return { needed: true, query: userPrompt }; // Mất key thì cứ search đại
+  if (!apiKey) return { needed: true, query: userPrompt }; 
 
   try {
     const systemPrompt = `You are a Search Optimizer.
     Analyze the user's request.
     1. DECIDE: Does this need external/real-time info? (True/False)
-    2. QUERY: If True, write the BEST Google search query (in user's language).
+    2. QUERY: If True, write the BEST search query (in user's language).
     
     RETURN JSON ONLY: { "needed": boolean, "query": "string" }`;
 
@@ -81,7 +85,6 @@ async function generateSearchQuery(userPrompt, apiKey, debugSteps) {
     try { 
         parsed = JSON.parse(content); 
     } catch (e) { 
-        // Fallback nếu model trả về text thường
         const needed = content.toLowerCase().includes('true');
         parsed = { needed, query: userPrompt };
     }
@@ -96,49 +99,46 @@ async function generateSearchQuery(userPrompt, apiKey, debugSteps) {
 }
 
 // ----------------------------
-// 2) SEARCH LAYER (DuckDuckGo Lite)
+// 2) SEARCH LAYER (Brave Search)
 // ----------------------------
-async function searchDDGLite(query, debugSteps) {
-    try {
-        // Dùng DuckDuckGo Lite (bản nhẹ, dễ parse HTML)
-        const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
-        
-        const res = await safeFetch(url, {
-            headers: { 
-                // Giả danh Browser cũ để lấy HTML đơn giản
-                'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-                'Accept': 'text/html' 
-            }
-        }, 8000);
+async function searchBrave(query, debugSteps) {
+  try {
+    // Brave Search Public Endpoint
+    const url = `https://search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
+    
+    const res = await safeFetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json' // Request JSON specifically
+      }
+    }, SEARCH_TIMEOUT_MS);
 
-        if (!res.ok) {
-            debugSteps.push({ ddg_error: res.status });
-            return null;
-        }
-
-        const html = await res.text();
-
-        // Regex đơn giản để lấy kết quả từ HTML của DDG Lite
-        // Cấu trúc thường là: <a class="result-link">Title</a> ... <td class="result-snippet">Snippet</td>
-        const results = [];
-        const regex = /<a class="result-link" href="(.*?)">(.*?)<\/a>[\s\S]*?<td class="result-snippet">(.*?)<\/td>/g;
-        
-        let match;
-        while ((match = regex.exec(html)) !== null && results.length < 5) {
-            results.push({
-                link: match[1],
-                title: match[2].replace(/<[^>]+>/g, '').trim(), // Xóa thẻ HTML thừa
-                snippet: match[3].replace(/<[^>]+>/g, '').trim()
-            });
-        }
-        
-        debugSteps.push({ ddg_found: results.length });
-        return results.length ? results : null;
-
-    } catch (e) {
-        debugSteps.push({ ddg_exception: String(e) });
-        return null;
+    if (!res.ok) {
+      debugSteps.push({ brave_error: res.status });
+      return null;
     }
+
+    const data = await res.json();
+    
+    // Parse Brave JSON Structure
+    if (!data || !data.web || !data.web.results) {
+      debugSteps.push({ brave_warning: 'no_web_results_in_json' });
+      return null;
+    }
+
+    const results = data.web.results.map(r => ({
+      title: r.title || 'No Title',
+      link: r.url || r.source || '',
+      snippet: r.description || ''
+    }));
+
+    debugSteps.push({ brave_found: results.length });
+    return results;
+
+  } catch (e) {
+    debugSteps.push({ brave_exception: String(e) });
+    return null;
+  }
 }
 
 // ----------------------------
@@ -157,8 +157,8 @@ export async function onRequestPost(context) {
 
     // Config Model
     const apiConfig = {
-      Mini: { key: env.MINI_API_KEY, model: 'tngtech/tng-r1t-chimera:free' },
-      Smart: { key: env.SMART_API_KEY, model: 'qwen/qwen3-4b:free' },
+      Mini: { key: env.MINI_API_KEY, model: 'openai/gpt-oss-20b:free' },
+      Smart: { key: env.SMART_API_KEY, model: 'z-ai/glm-4.5-air:free' },
       Nerd: { key: env.NERD_API_KEY, model: 'amazon/nova-2-lite-v1:free' }
     };
     const config = apiConfig[modelName];
@@ -169,18 +169,16 @@ export async function onRequestPost(context) {
     let injectionData = '';
 
     // --- STEP 1: GENERATE QUERY ---
-    // Ưu tiên dùng DECIDE_KEY, nếu không có thì dùng ké SMART_KEY
     const queryKey = env.DECIDE_API_KEY || env.SMART_API_KEY;
     const decision = await generateSearchQuery(lastMsg, queryKey, debug.steps);
 
-    // --- STEP 2: SEARCH (DuckDuckGo Lite Only) ---
+    // --- STEP 2: SEARCH (Brave) ---
     if (decision.needed) {
-        const results = await searchDDGLite(decision.query, debug.steps);
+        const results = await searchBrave(decision.query, debug.steps);
         
-        if (results) {
-            toolUsed = 'WebSearch (DuckDuckGo)';
+        if (results && results.length > 0) {
+            toolUsed = 'WebSearch (Brave)';
             
-            // Format dữ liệu để nhét vào Prompt
             const context = results.map((r, i) => 
                 `[${i+1}] Title: ${r.title}\nSource: ${r.link}\nSummary: ${r.snippet}`
             ).join('\n\n');
@@ -189,40 +187,37 @@ export async function onRequestPost(context) {
 ==========
 SYSTEM NOTE: WEB SEARCH RESULTS ACQUIRED.
 User Query: "${decision.query}"
-Search Results:
+Brave Search Results:
 ${context}
 ==========
 `;
         } else {
             toolUsed = 'WebSearch (Failed/No Results)';
-            debug.steps.push({ msg: 'DDG returned no data' });
+            debug.steps.push({ msg: 'Brave returned no data' });
         }
     }
 
     // --- STEP 3: ANSWER (Strict Prompt) ---
     const finalMessages = [...messages];
 
-    // System Prompt này được viết để "ép" model trả lời tự nhiên
     const systemPrompt = {
         role: 'system',
-        content: `You are Oceep, a helpful and smart AI assistant.
+        content: `You are Oceep, a helpful AI assistant.
         
         INSTRUCTIONS:
-        1. Context: I have ALREADY performed a web search for you. The results are attached above (SYSTEM NOTE).
-        2. Action: Read the "Search Results" and answer the user's question directly and naturally.
-        3. Prohibition: DO NOT output JSON, XML, or debug information. DO NOT say "I will search for...".
-        4. Citation: Use [1], [2] to cite sources if you use the information.
-        5. Fallback: If search results are empty or irrelevant, use your own knowledge but admit that real-time info might be missing.
-        6. Language: Always answer in the same language as the user (Vietnamese/English).
+        1. Context: I have ALREADY performed a Brave web search. Results are above (SYSTEM NOTE).
+        2. Action: Read the results and answer the user naturally.
+        3. Prohibition: DO NOT output JSON, code blocks, or internal debug info.
+        4. Citation: Use [1], [2] to cite sources.
+        5. Fallback: If results are empty, use internal knowledge.
+        6. Language: Answer in the same language as the user.
         
         ${injectionData}`
     };
 
-    // Đẩy System Prompt lên đầu list (Xóa system cũ nếu có để tránh nhiễu)
     const cleanMessages = finalMessages.filter(m => m.role !== 'system');
     cleanMessages.unshift(systemPrompt);
 
-    // Gọi Model trả lời
     const modelRes = await safeFetch(OPENROUTER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.key}` },
@@ -237,7 +232,6 @@ ${context}
     const data = await modelRes.json();
     const answer = data?.choices?.[0]?.message?.content || '';
 
-    // Trả về JSON chuẩn
     return new Response(JSON.stringify({
       content: answer,
       toolUsed,
