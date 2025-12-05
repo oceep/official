@@ -1,16 +1,18 @@
-// script.js
+// script.js - PHIÊN BẢN HOÀN CHỈNH (Fix treo, Full tính năng)
 
 //=====================================================================//
-// 1. LOGIC BẢO MẬT & KHỞI TẠO                                         //
+// 1. CẤU HÌNH & KHỞI TẠO CƠ BẢN                                       //
 //=====================================================================//
 
+// Kiểm tra khóa bảo mật
 try {
     if (localStorage.getItem('isLocked') === 'true') {
         window.location.href = 'verify.html';
         throw new Error("App is locked."); 
     }
-} catch (e) {}
+} catch (e) { console.error(e); }
 
+// Helper: Copy Code
 window.copyToClipboard = function(btn) {
     try {
         const header = btn.closest('.code-box-header');
@@ -27,6 +29,7 @@ window.copyToClipboard = function(btn) {
     } catch (e) {}
 };
 
+// Cấu hình Token
 const tokenConfig = {
     IS_INFINITE: true,           
     MAX_TOKENS: 50,              
@@ -36,7 +39,7 @@ const tokenConfig = {
 };
 
 //=====================================================================//
-// 2. DOM ELEMENTS                                                     //
+// 2. DOM ELEMENTS & STATE                                             //
 //=====================================================================//
 
 const getEl = (id) => document.getElementById(id);
@@ -96,8 +99,9 @@ const uploadFileBtn = getEl('upload-file-btn');
 const fileInput = getEl('file-input');
 const fileThumbnailContainer = getEl('file-thumbnail-container');
 
+// State Variables
 let stagedFile = null;
-let currentLang = 'vi';
+let currentLang = localStorage.getItem('language') || 'vi';
 let isTutorMode = localStorage.getItem('isTutorMode') === 'true';
 let abortController;
 let isRandomPromptUsedInSession = false;
@@ -105,6 +109,7 @@ let conversationHistory = [];
 let chatHistories = {};
 let currentChatId = null;
 
+// Model Init
 let currentModel;
 try { currentModel = JSON.parse(localStorage.getItem('currentModel')); } catch (e) {}
 if (!currentModel) currentModel = { model: 'Mini', version: '' };
@@ -122,12 +127,12 @@ const themeColors = {
 };
 
 //=====================================================================//
-// 3. CORE FUNCTIONS                                                   //
+// 3. CORE FUNCTIONS (Theme, Lang, Storage)                            //
 //=====================================================================//
 
 function escapeHTML(str) {
     if (!str) return '';
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
 function saveStateToLocalStorage() {
@@ -296,6 +301,7 @@ function showModal(modal, show) {
     }, 300);
 }
 
+// Event Listeners for UI
 if(themeMenuButton) themeMenuButton.addEventListener('click', () => showModal(themeModal, true));
 if(textElements.closeModalButton) textElements.closeModalButton.addEventListener('click', () => showModal(themeModal, false));
 if(themeModal) themeModal.addEventListener('click', (e) => { if(e.target === themeModal) showModal(themeModal, false); });
@@ -360,7 +366,7 @@ if(modelButton) modelButton.onclick = (e) => { e.stopPropagation(); showInitialM
 document.onclick = (e) => { if(modelPopup && !modelButton.contains(e.target)) modelPopup.classList.add('hidden'); };
 
 //=====================================================================//
-// 4. CHAT LOGIC                                                       //
+// 4. CHAT LOGIC (Streaming, Format, Render)                           //
 //=====================================================================//
 
 function shouldShowSearchStatus(text) {
@@ -396,6 +402,7 @@ function updateRandomButtonVisibility() {
     }
 }
 
+// FORMATTER (Bao gồm xử lý Source Pill)
 function formatAIResponse(text) {
     if (!text) return '';
     const codeBlocks = [];
@@ -405,6 +412,7 @@ function formatAIResponse(text) {
         return `__CODE_BLOCK_${index}__`; 
     });
 
+    // Xử lý Source Pill: **[Name](Link)**
     const sourceRegex = /\*\*\[([^\]]+)\]\(([^)]+)\)\*\*/g;
     processedText = processedText.replace(sourceRegex, (match, name, url) => {
         return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="source-pill" title="Nguồn: ${name}">${name}</a>`;
@@ -414,6 +422,20 @@ function formatAIResponse(text) {
     processedText = processedText.replace(/^##\s+(.*)$/gm, '<h2 class="text-xl font-bold mt-4 mb-2 border-b border-gray-500/50 pb-1">$1</h2>');
     processedText = processedText.replace(/^###\s+(.*)$/gm, '<h3 class="text-lg font-bold mt-3 mb-1">$1</h3>');
     
+    const tableRegex = /\|(.+)\|\n\|([-:| ]+)\|\n((?:\|.*\|\n?)*)/g;
+    processedText = processedText.replace(tableRegex, (match, header, separator, body) => {
+        try {
+            const safeHeader = header || "";
+            const headers = safeHeader.split('|').filter(h => h.trim() !== '').map(h => `<th class="px-4 py-2 bg-gray-700 border border-gray-600 font-semibold text-white">${h.trim()}</th>`).join('');
+            const safeBody = body || "";
+            const rows = safeBody.trim().split('\n').map(row => {
+                const cells = row.split('|').filter(c => c.trim() !== '').map(c => `<td class="px-4 py-2 border border-gray-600 text-gray-200">${c.trim()}</td>`).join('');
+                return `<tr class="hover:bg-gray-700/50 transition-colors">${cells}</tr>`;
+            }).join('');
+            return `<div class="overflow-x-auto my-3 rounded-lg shadow-lg"><table class="min-w-full bg-gray-800 border-collapse text-sm"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`;
+        } catch (e) { return match; }
+    });
+
     processedText = processedText.replace(/\n/g, '<br>');
 
     processedText = processedText.replace(/__CODE_BLOCK_(\d+)__/g, (match, index) => {
@@ -438,6 +460,8 @@ function createMessageElement(messageContent, sender) {
         if (Array.isArray(messageContent)) {
             messageContent.forEach(p => {
                 if (p.type === 'text') { const d = document.createElement('div'); d.innerHTML = escapeHTML(p.text); wrapper.appendChild(d); }
+                else if (p.type === 'image_url') { const i = document.createElement('img'); i.src = p.image_url.url; i.className='rounded-lg max-w-xs'; wrapper.appendChild(i); }
+                else if (p.type === 'video_url') { const v = document.createElement('video'); v.src = p.video_url.url; v.controls=true; v.className='rounded-lg max-w-xs'; wrapper.appendChild(v); }
             });
         } else wrapper.innerHTML = escapeHTML(messageContent);
     } else {
@@ -465,15 +489,14 @@ async function typeWriterEffect(text, element) {
     element.innerHTML = formatAIResponse(text);
 }
 
-// FIX HANGING ISSUE: Robust Fetch with Timeout
+// API STREAMING (Fix Hanging & Timeout)
 async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     const isLocal = location.hostname === 'localhost' || location.protocol === 'file:';
     const API_URL = isLocal ? '/api/handler' : '/api/handler';
 
     try {
         const controller = new AbortController();
-        // 60s Client Timeout để không bao giờ treo vĩnh viễn
-        const timeoutId = setTimeout(() => controller.abort(), 60000); 
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s Client Timeout
         const combinedSignal = signal || controller.signal;
 
         const response = await fetch(API_URL, {
@@ -500,7 +523,6 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     } catch (error) {
         if (error.name === 'AbortError') {
             if (!signal?.aborted) {
-                // Do timeout tự ngắt
                 aiMessageEl.firstChild.innerHTML = `<span class="text-red-400 font-bold">⚠️ Quá thời gian chờ (Timeout). Vui lòng thử lại.</span>`;
                 throw new Error("Request Timed Out");
             }
@@ -515,11 +537,12 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     }
 }
 
+// FORM SUBMIT
 if(chatFormEl) {
     chatFormEl.addEventListener('submit', async function(event) {
         event.preventDefault();
         const message = messageInput.value.trim();
-        if (!message) return;
+        if (!message && !stagedFile) return;
         
         const initialView = getEl('initial-view');
         const chatContainer = getEl('chat-container');
@@ -534,15 +557,24 @@ if(chatFormEl) {
             }, 500);
         }
 
-        const userContent = [{ type: "text", text: message }];
+        const userContent = [];
+        if (stagedFile) {
+            if (stagedFile.type === 'image') userContent.push({ type: "image_url", image_url: { url: stagedFile.url } });
+            else if (stagedFile.type === 'video') userContent.push({ type: "video_url", video_url: { url: stagedFile.url } });
+        }
+        if (message) userContent.push({ type: "text", text: message });
+
         const userEl = createMessageElement(userContent, 'user');
         chatContainer.appendChild(userEl);
 
-        conversationHistory.push({ role: 'user', content: message });
+        const historyContent = userContent.length === 1 && userContent[0].type === 'text' ? message : userContent;
+        conversationHistory.push({ role: 'user', content: historyContent });
         renderHistoryList();
 
         messageInput.value = '';
         messageInput.dispatchEvent(new Event('input')); 
+        stagedFile = null;
+        if(fileThumbnailContainer) fileThumbnailContainer.innerHTML = '';
         isRandomPromptUsedInSession = true; 
         updateRandomButtonVisibility(); 
         chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -550,7 +582,7 @@ if(chatFormEl) {
         const aiEl = createMessageElement('', 'ai');
         aiEl.firstChild.classList.add('streaming'); 
         
-        // Show status based on intent
+        // Show proper status
         if (shouldShowSearchStatus(message)) {
             aiEl.firstChild.innerHTML = '<span class="animate-pulse text-blue-400">Đang tìm kiếm thông tin...</span>';
         } else {
@@ -602,7 +634,7 @@ function initTokenSystem() {
     if(tokenInfinity) tokenInfinity.classList.remove('hidden');
 }
 
-// Other UI
+// Other UI Events
 if(stopButton) stopButton.onclick = () => { if (abortController) abortController.abort(); };
 if(randomPromptBtn) randomPromptBtn.onclick = () => {
     if (isRandomPromptUsedInSession) return;
@@ -630,6 +662,27 @@ function updateLearnButtonVisualState() {
     }
 }
 
+// File Upload
+if(uploadFileBtn) uploadFileBtn.addEventListener('click', () => fileInput && fileInput.click());
+if(fileInput) fileInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (stagedFile && stagedFile.type === 'video') URL.revokeObjectURL(stagedFile.url);
+    stagedFile = null;
+    if(fileThumbnailContainer) fileThumbnailContainer.innerHTML = '';
+    const rmBtn = `<button id="remove-file-btn" class="absolute top-0 right-0 -mt-2 -mr-2 bg-red-500 text-white rounded-full h-6 w-6 flex items-center justify-center font-bold text-xs btn-interaction">&times;</button>`;
+    if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            stagedFile = { file: file, url: e.target.result, type: 'image' };
+            fileThumbnailContainer.innerHTML = `<div class="relative inline-block"><img src="${stagedFile.url}" class="h-20 w-auto rounded-lg" />${rmBtn}</div>`;
+            getEl('remove-file-btn').onclick = () => { stagedFile = null; fileThumbnailContainer.innerHTML = ''; fileInput.value = ''; };
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+// Sidebar History
 function renderHistoryList() {
     if(!historyList) return;
     historyList.innerHTML = '';
@@ -638,7 +691,11 @@ function renderHistoryList() {
         const history = chatHistories[chatId];
         if (chatId === currentChatId && history.length === 0) return;
         let txt = "Chat mới";
-        if (history.length > 0 && history[0].content) txt = history[0].content;
+        if (history.length > 0) {
+             const c = history[0].content;
+             if (typeof c === 'string') txt = c;
+             else if (Array.isArray(c)) txt = c.some(p=>p.type==='image_url') ? '[Hình ảnh]' : '[Nội dung]';
+        }
         
         const item = document.createElement('div');
         item.className = 'history-item flex items-center justify-between p-2 rounded-md cursor-pointer';
@@ -683,7 +740,9 @@ function setActiveHistoryItem(chatId) {
     });
 }
 
+// 5. MAIN ENTRY POINT
 document.addEventListener('DOMContentLoaded', () => {
+    // Security Gate check omitted for brevity but logic is in init
     const theme = localStorage.getItem('theme') || 'dark';
     const lang = localStorage.getItem('language') || 'vi';
     switchLanguage(lang);
@@ -700,10 +759,17 @@ document.addEventListener('DOMContentLoaded', () => {
         soundWaveButton.classList.toggle('hidden', hasText);
         sendButton.classList.toggle('hidden', !hasText);
     });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key.toLowerCase() === 'g') { e.preventDefault(); startNewChat(); }
+        const active = document.activeElement;
+        const isInput = active.tagName === 'INPUT' || active.tagName === 'TEXTAREA';
+        if (!isInput && e.key.length === 1 && !e.ctrlKey && !e.metaKey) if(messageInput) messageInput.focus();
+    });
 });
 
 //=====================================================================//
-// 6. INJECT CSS FOR SOURCE PILLS                                      //
+// 6. INJECT CSS FOR SOURCE PILLS (Auto-run)                           //
 //=====================================================================//
 (function addSourcePillStyles() {
     const style = document.createElement('style');
