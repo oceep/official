@@ -158,7 +158,7 @@ export async function onRequestPost(context) {
 
     // --- MODEL CONFIG ---
     const apiConfig = {
-      Mini: { key: env.MINI_API_KEY, model: 'qwen/qwen3-4b:free' },
+      Mini: { key: env.MINI_API_KEY, model: 'arcee-ai/trinity-mini:free' },
       Smart: { key: env.SMART_API_KEY, model: 'mistralai/mistral-small-3.1-24b-instruct:free' },
       Nerd: { key: env.NERD_API_KEY, model: 'z-ai/glm-4.5-air:free' }
     };
