@@ -1,18 +1,8 @@
 // functions/api/handler.js
 
 /**
- * handler.js — "LLM Web Search" (OpenWebUI Style)
- * * WORKFLOW:
- * 1. QUERY GEN (The Mind): Uses 'arcee-ai/trinity-mini' to Generate the perfect search query.
- * 2. SEARCH (The Hands): 
- * - Tries ScraperX (API Key).
- * - IF FAILS: Falls back to DuckDuckGo Lite (Free, HTML-only).
- * 3. ANSWER (The Mouth): RAG response using the found data.
- *
- * REQUIRED VARS:
- * - DECIDE_API_KEY   (for Trinity - Query Gen)
- * - SCRAPERX_API_KEY (for ScraperX)
- * - MINI_API_KEY, SMART_API_KEY, etc.
+ * handler.js — "LLM Web Search" (Strict Answer Mode)
+ * FIX: Ngăn chặn Model in ra JSON/Code search. Bắt buộc trả lời bằng lời nói.
  */
 
 const corsHeaders = {
@@ -49,29 +39,26 @@ async function safeFetch(url, opts = {}, ms = 10000) {
 }
 
 // ----------------------------
-// 1) QUERY GENERATOR ("LLM Web Search" Logic)
+// 1) QUERY GENERATOR
 // ----------------------------
 async function generateSearchQuery(userPrompt, apiKey, debugSteps) {
-  if (!apiKey) return { needed: true, query: userPrompt }; // Fallback
+  if (!apiKey) return { needed: true, query: userPrompt };
 
   try {
-    // This prompt mimics OpenWebUI's query generation
     const systemPrompt = `You are a Search Optimizer.
     Analyze the user's request.
     1. DECIDE: Does this need external info? (True/False)
-    2. QUERY: If True, write the BEST Google search query for it. If False, leave empty.
-    
-    RETURN JSON ONLY:
-    { "needed": boolean, "query": "string" }`;
+    2. QUERY: If True, write the BEST Google search query.
+    RETURN JSON ONLY: { "needed": boolean, "query": "string" }`;
 
     const payload = {
       model: DECISION_MODEL,
-      response_format: { type: "json_object" }, // Try to force JSON
+      response_format: { type: "json_object" },
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      max_tokens: 50,
+      max_tokens: 60,
       temperature: 0.1
     };
     
@@ -85,64 +72,43 @@ async function generateSearchQuery(userPrompt, apiKey, debugSteps) {
     
     const data = await res.json();
     const content = data?.choices?.[0]?.message?.content || '{}';
-    
-    // Attempt parse
     let parsed;
-    try {
-        parsed = JSON.parse(content);
-    } catch (e) {
-        // Fallback if model output raw text
-        const needed = content.toLowerCase().includes('true');
-        parsed = { needed, query: userPrompt };
-    }
+    try { parsed = JSON.parse(content); } catch (e) { parsed = { needed: true, query: userPrompt }; }
 
     debugSteps.push({ step: 'query_gen', output: parsed });
     return parsed;
-
   } catch (e) {
-    debugSteps.push({ query_gen_error: String(e) });
-    // Default to searching the raw prompt if generation fails
     return { needed: true, query: userPrompt };
   }
 }
 
 // ----------------------------
-// 2) SEARCH LAYER (Dual Engine)
+// 2) SEARCH LAYER
 // ----------------------------
-
-// A. DuckDuckGo Lite (Fallback - No Key Needed)
 async function searchDDGLite(query) {
     try {
         const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
         const res = await safeFetch(url, {
-            headers: { 
-                'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-                'Accept': 'text/html' 
-            }
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' }
         }, 8000);
         if (!res.ok) return null;
         const html = await res.text();
-
-        // Simple Regex Scraping for DDG Lite
         const results = [];
         const regex = /<a class="result-link" href="(.*?)">(.*?)<\/a>[\s\S]*?<td class="result-snippet">(.*?)<\/td>/g;
         let match;
         while ((match = regex.exec(html)) !== null && results.length < 5) {
             results.push({
                 link: match[1],
-                title: match[2].replace(/<[^>]+>/g, ''), // strip tags
+                title: match[2].replace(/<[^>]+>/g, ''),
                 snippet: match[3].replace(/<[^>]+>/g, '')
             });
         }
         return results.length ? results : null;
-    } catch (e) {
-        return null;
-    }
+    } catch (e) { return null; }
 }
 
-// B. ScraperX (Primary)
 async function searchScraperX(query, apiKey, debugSteps) {
-  const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en&gl=us`;
+  const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=vi&gl=vn`;
   const apiUrl = new URL(SCRAPERX_ENDPOINT);
   apiUrl.searchParams.set('api_key', apiKey);
   apiUrl.searchParams.set('url', googleUrl);
@@ -150,36 +116,11 @@ async function searchScraperX(query, apiKey, debugSteps) {
 
   try {
     const res = await safeFetch(apiUrl.toString(), { method: 'GET' }, SEARCH_TIMEOUT_MS);
-    if (!res.ok) {
-        debugSteps.push({ scraperx_fail: res.status });
-        return null;
-    }
+    if (!res.ok) return null;
     const data = await res.json();
     const results = data.organic_results || data.organic || data.results || [];
     return results.length ? results.slice(0, 5) : null;
-  } catch (e) {
-    debugSteps.push({ scraperx_error: String(e) });
-    return null;
-  }
-}
-
-// Main Search Router
-async function performWebSearch(query, env, debugSteps) {
-    let results = null;
-
-    // 1. Try ScraperX
-    if (env.SCRAPERX_API_KEY) {
-        debugSteps.push({ action: 'trying_scraperx' });
-        results = await searchScraperX(query, env.SCRAPERX_API_KEY, debugSteps);
-        if (results) return { provider: 'ScraperX', results };
-    }
-
-    // 2. Fallback to DDG Lite
-    debugSteps.push({ action: 'trying_ddg_fallback' });
-    results = await searchDDGLite(query);
-    if (results) return { provider: 'DuckDuckGo (Lite)', results };
-
-    return null;
+  } catch (e) { return null; }
 }
 
 // ----------------------------
@@ -196,7 +137,6 @@ export async function onRequestPost(context) {
     const { modelName = 'Smart', messages = [] } = body;
     const debug = { steps: [] };
 
-    // Config
     const apiConfig = {
       Mini: { key: env.MINI_API_KEY, model: 'openai/gpt-oss-20b:free' },
       Smart: { key: env.SMART_API_KEY, model: 'z-ai/glm-4.5-air:free' },
@@ -209,55 +149,74 @@ export async function onRequestPost(context) {
     let toolUsed = 'Internal Knowledge';
     let injectionData = '';
 
-    // --- STEP 1: GENERATE QUERY ---
-    // Use DECIDE key, or fall back to SMART key
+    // --- STEP 1: QUERY GEN ---
     const queryKey = env.DECIDE_API_KEY || env.SMART_API_KEY;
     const decision = await generateSearchQuery(lastMsg, queryKey, debug.steps);
 
-    // --- STEP 2: EXECUTE SEARCH ---
+    // --- STEP 2: SEARCH ---
     if (decision.needed) {
-        const searchData = await performWebSearch(decision.query, env, debug.steps);
-        
-        if (searchData && searchData.results) {
-            toolUsed = `WebSearch (${searchData.provider})`;
-            
-            // Format for RAG
-            const context = searchData.results.map((r, i) => 
-                `[${i+1}] ${r.title}\nSource: ${r.link}\nSummary: ${r.snippet}`
+        let results = null;
+        if (env.SCRAPERX_API_KEY) {
+            results = await searchScraperX(decision.query, env.SCRAPERX_API_KEY, debug.steps);
+            if (results) toolUsed = 'WebSearch (ScraperX)';
+        }
+        if (!results) {
+            results = await searchDDGLite(decision.query);
+            if (results) toolUsed = 'WebSearch (DDG Lite)';
+        }
+
+        if (results) {
+            const context = results.map((r, i) => 
+                `[${i+1}] Title: ${r.title}\nSource: ${r.link}\nSummary: ${r.snippet}`
             ).join('\n\n');
 
-            injectionData = `\n\n=== LIVE SEARCH RESULTS (${searchData.provider}) ===\nQuery: "${decision.query}"\n\n${context}\n\n=== END RESULTS ===\n`;
+            // Cập nhật Prompt Inject để Model hiểu rõ hơn
+            injectionData = `
+==========
+SYSTEM NOTE: WEB SEARCH RESULTS ACQUIRED.
+The user asked: "${lastMsg}"
+Real-time Search Results are below:
+${context}
+==========
+`;
         } else {
-            toolUsed = 'WebSearch (Failed/No Results)';
-            debug.steps.push({ msg: 'All search providers failed' });
+            toolUsed = 'WebSearch (Failed)';
         }
     }
 
-    // --- STEP 3: ANSWER ---
+    // --- STEP 3: ANSWER (FIXED PROMPT) ---
     const finalMessages = [...messages];
+    
+    // Prompt cực kỳ nghiêm ngặt để cấm JSON/Code
     const systemPrompt = {
         role: 'system',
-        content: `You are Oceep.
+        content: `You are Oceep, a helpful AI assistant.
         
-        INSTRUCTIONS:
-        1. Use the "LIVE SEARCH RESULTS" below to answer the user's question if present.
-        2. Cite sources as [1], [2], etc.
-        3. If results are missing, use your internal knowledge.
-        4. Always answer in the user's language.
+        STRICT INSTRUCTIONS:
+        1. I have ALREADY performed the web search for you. The results are attached above (SYSTEM NOTE).
+        2. DO NOT output JSON, XML, or Search Commands (like "topn", "query").
+        3. DO NOT output code blocks unless the user explicitly asked for programming code.
+        4. YOUR TASK: Read the "Search Results" and write a DIRECT, NATURAL answer to the user.
+        5. Answer in the same language as the user (Vietnamese/English).
+        6. Cite sources using [1], [2].
         
         ${injectionData}`
     };
-    finalMessages.unshift(systemPrompt);
+
+    // Đưa System Prompt lên đầu
+    // Xóa các system prompt cũ nếu có để tránh conflict
+    const cleanMessages = finalMessages.filter(m => m.role !== 'system');
+    cleanMessages.unshift(systemPrompt);
 
     const modelRes = await safeFetch(OPENROUTER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.key}` },
       body: JSON.stringify({
           model: config.model,
-          messages: finalMessages,
+          messages: cleanMessages,
           max_tokens: 2000
       })
-    }, 30000);
+    }, 40000);
 
     if (!modelRes.ok) throw new Error('Model API failed');
     const data = await modelRes.json();
@@ -270,6 +229,6 @@ export async function onRequestPost(context) {
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message, stack: err.stack }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
   }
 }
