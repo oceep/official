@@ -1,6 +1,5 @@
-// script.js - PHIÊN BẢN FULL (NATIVE TRANSLATIONS & ARROW ICON)
-// Bao gồm: Security, Token, Themes, Multi-lang (Native), Model Selector, Chat History, File Upload, MathJax.
-// ĐÃ FIX: Dịch giao diện từng ngôn ngữ, Icon nút Gửi (Arrow Up), Logic Language Enforcement.
+// script.js - PHIÊN BẢN FINAL FIX (ICON MŨI TÊN & DỊCH FULL)
+// Đã sửa: Nút Gửi luôn là Icon Mũi Tên (không hiện chữ), Dịch toàn bộ giao diện.
 
 //=====================================================================//
 // 1. CẤU HÌNH & DỮ LIỆU BAN ĐẦU                                     //
@@ -40,10 +39,10 @@ const tokenConfig = {
     TOKEN_REGEN_AMOUNT: 1,        
 };
 
-// --- BỘ LUẬT NGÔN NGỮ (LANGUAGE ENFORCEMENT) ---
+// --- LUẬT NGÔN NGỮ (LANGUAGE ENFORCEMENT) ---
 const LANGUAGE_RULES = {
-    vi: "YÊU CẦU TUYỆT ĐỐI: Bạn PHẢI trả lời câu hỏi hoàn toàn bằng TIẾNG VIỆT. Không dùng tiếng Anh trừ khi là thuật ngữ kỹ thuật không thể dịch.",
-    en: "STRICT REQUIREMENT: You MUST answer the query entirely in ENGLISH.",
+    vi: "YÊU CẦU TUYỆT ĐỐI: Bạn PHẢI trả lời hoàn toàn bằng TIẾNG VIỆT.",
+    en: "STRICT REQUIREMENT: You MUST answer entirely in ENGLISH.",
     zh: "STRICT REQUIREMENT: You MUST answer entirely in CHINESE (Simplified/简体中文).",
     ja: "STRICT REQUIREMENT: You MUST answer entirely in JAPANESE (日本語).",
     fr: "STRICT REQUIREMENT: You MUST answer entirely in FRENCH (Français).",
@@ -60,13 +59,13 @@ function generateSystemPrompt(mode, langCode) {
         ${langRule}
         *** INSTRUCTIONS ***
         1. METHOD: Do not just give the final answer. Explain the "Why" and "How".
-        2. STYLE: Be educational, encouraging, but concise. Break down complex topics into simple steps.`;
+        2. STYLE: Be educational, encouraging, but concise.`;
     } else {
         return `You are Oceep, a smart and helpful AI Assistant.
         *** STRICT LANGUAGE REQUIREMENT ***
         ${langRule}
         *** INSTRUCTIONS ***
-        1. STYLE: Be CONCISE, SUCCINCT, and COMPLETE. Avoid unnecessary fluff.
+        1. STYLE: Be CONCISE, SUCCINCT, and COMPLETE.
         2. CITATION: If you use search results, cite them as **[Source Name](URL)**.`;
     }
 }
@@ -77,7 +76,7 @@ function generateSystemPrompt(mode, langCode) {
 
 const getEl = (id) => document.getElementById(id);
 
-// DOM Elements
+// DOM Elements cần dịch
 const textElements = {
     header: getEl('header-title'),
     main: getEl('main-title'),
@@ -97,6 +96,7 @@ const textElements = {
     comingSoonTitle: getEl('coming-soon-title'),
     comingSoonText: getEl('coming-soon-text'),
     closeComingSoonModal: getEl('close-coming-soon-modal'),
+    // Tooltips (nếu dùng text riêng)
     randomTooltip: getEl('random-tooltip'),
     videoTooltip: getEl('video-tooltip'),
     learnTooltip: getEl('learn-tooltip'),
@@ -159,44 +159,43 @@ try {
 } catch (e) { currentModel = null; }
 if (!currentModel) currentModel = { model: 'Mini', version: '' };
 
-// --- [NÂNG CẤP] TỪ ĐIỂN ĐA NGÔN NGỮ ĐẦY ĐỦ ---
+// --- TỪ ĐIỂN DỊCH (FULL) ---
 const translations = {
     vi: {
-        sidebarHeader: "Lịch sử Chat", newChatTitle: "Chat mới", messagePlaceholder: "Bạn muốn biết gì?", aiTypingPlaceholder: "AI đang trả lời...", outOfTokensPlaceholder: "Hết lượt.", sendButton: "Gửi", stopButton: "Dừng", modelButtonDefault: "Expert", randomButton: "Ngẫu nhiên", videoButton: "Tạo Video", learnButton: "Học Tập", footerText: "AI có thể mắc lỗi. Hãy kiểm tra thông tin quan trọng.", themeModalTitle: "Chọn Giao Diện", languageModalTitle: "Chọn Ngôn Ngữ", themeDark: "Tối", themeLight: "Sáng", themeOcean: "Biển", modalClose: "Đóng", greetingMorning: "Chào buổi sáng", greetingNoon: "Chào buổi trưa", greetingAfternoon: "Chào buổi chiều", greetingEvening: "Chào buổi tối", comingSoon: "Sắp có", comingSoonTitle: "Sắp có...", comingSoonText: "Tính năng này đang được phát triển.", langTooltip: "Đổi Ngôn Ngữ", themeTooltip: "Đổi Giao Diện", historyTooltip: "Lịch Sử Chat", newChatTooltip: "Chat Mới", modelMiniDesc: "Nhanh.", modelSmartDesc: "Thông minh.", modelNerdDesc: "Chuyên sâu."
+        sidebarHeader: "Lịch sử Chat", newChatTitle: "Chat mới", messagePlaceholder: "Bạn muốn biết gì?", aiTypingPlaceholder: "AI đang trả lời...", footerText: "AI có thể mắc lỗi. Hãy kiểm tra thông tin.", themeModalTitle: "Giao Diện", languageModalTitle: "Ngôn Ngữ", themeDark: "Tối", themeLight: "Sáng", themeOcean: "Biển", modalClose: "Đóng", greetingMorning: "Chào buổi sáng", greetingNoon: "Chào buổi trưa", greetingAfternoon: "Chào buổi chiều", greetingEvening: "Chào buổi tối", comingSoon: "Sắp có", comingSoonTitle: "Sắp có...", comingSoonText: "Tính năng đang phát triển.", langTooltip: "Ngôn Ngữ", themeTooltip: "Giao Diện", historyTooltip: "Lịch Sử", newChatTooltip: "Mới", modelMiniDesc: "Nhanh", modelSmartDesc: "Thông minh", modelNerdDesc: "Chuyên sâu", randomButton: "Ngẫu nhiên", videoButton: "Video", learnButton: "Học tập"
     },
     en: {
-        sidebarHeader: "History", newChatTitle: "New Chat", messagePlaceholder: "Ask me anything...", aiTypingPlaceholder: "AI replying...", outOfTokensPlaceholder: "No tokens.", sendButton: "Send", stopButton: "Stop", modelButtonDefault: "Expert", randomButton: "Random", videoButton: "Video", learnButton: "Learn", footerText: "AI may err. Check important info.", themeModalTitle: "Theme", languageModalTitle: "Language", themeDark: "Dark", themeLight: "Light", themeOcean: "Ocean", modalClose: "Close", greetingMorning: "Good morning", greetingNoon: "Good afternoon", greetingAfternoon: "Good afternoon", greetingEvening: "Good evening", comingSoon: "Coming Soon", comingSoonTitle: "Soon...", comingSoonText: "In development.", langTooltip: "Language", themeTooltip: "Theme", historyTooltip: "History", newChatTooltip: "New", modelMiniDesc: "Fast.", modelSmartDesc: "Smart.", modelNerdDesc: "Deep."
+        sidebarHeader: "History", newChatTitle: "New Chat", messagePlaceholder: "Ask me anything...", aiTypingPlaceholder: "AI replying...", footerText: "AI may err. Check info.", themeModalTitle: "Theme", languageModalTitle: "Language", themeDark: "Dark", themeLight: "Light", themeOcean: "Ocean", modalClose: "Close", greetingMorning: "Good morning", greetingNoon: "Good afternoon", greetingAfternoon: "Good afternoon", greetingEvening: "Good evening", comingSoon: "Coming Soon", comingSoonTitle: "Soon...", comingSoonText: "In dev.", langTooltip: "Language", themeTooltip: "Theme", historyTooltip: "History", newChatTooltip: "New", modelMiniDesc: "Fast", modelSmartDesc: "Smart", modelNerdDesc: "Deep", randomButton: "Random", videoButton: "Video", learnButton: "Learn"
     },
     zh: {
-        sidebarHeader: "历史记录", newChatTitle: "新对话", messagePlaceholder: "你想知道什么？", aiTypingPlaceholder: "AI正在思考...", outOfTokensPlaceholder: "次数用尽", sendButton: "发送", stopButton: "停止", modelButtonDefault: "专家", randomButton: "随机", videoButton: "视频", learnButton: "学习", footerText: "AI可能会犯错。请核实重要信息。", themeModalTitle: "选择主题", languageModalTitle: "选择语言", themeDark: "深色", themeLight: "浅色", themeOcean: "海洋", modalClose: "关闭", greetingMorning: "早上好", greetingNoon: "中午好", greetingAfternoon: "下午好", greetingEvening: "晚上好", comingSoon: "即将推出", comingSoonTitle: "即将推出...", comingSoonText: "功能开发中。", langTooltip: "语言", themeTooltip: "主题", historyTooltip: "历史", newChatTooltip: "新对话", modelMiniDesc: "快速", modelSmartDesc: "智能", modelNerdDesc: "深度"
+        sidebarHeader: "历史", newChatTitle: "新对话", messagePlaceholder: "你想知道什么？", aiTypingPlaceholder: "AI正在思考...", footerText: "AI可能犯错。请核实。", themeModalTitle: "主题", languageModalTitle: "语言", themeDark: "深色", themeLight: "浅色", themeOcean: "海洋", modalClose: "关闭", greetingMorning: "早上好", greetingNoon: "中午好", greetingAfternoon: "下午好", greetingEvening: "晚上好", comingSoon: "即将推出", comingSoonTitle: "即将推出...", comingSoonText: "开发中。", langTooltip: "语言", themeTooltip: "主题", historyTooltip: "历史", newChatTooltip: "新对话", modelMiniDesc: "快速", modelSmartDesc: "智能", modelNerdDesc: "深度", randomButton: "随机", videoButton: "视频", learnButton: "学习"
     },
     ja: {
-        sidebarHeader: "履歴", newChatTitle: "新しいチャット", messagePlaceholder: "何でも聞いてください", aiTypingPlaceholder: "AIが応答中...", outOfTokensPlaceholder: "トークン切れ", sendButton: "送信", stopButton: "停止", modelButtonDefault: "エキスパート", randomButton: "ランダム", videoButton: "動画", learnButton: "学習", footerText: "AIは間違える可能性があります。", themeModalTitle: "テーマ", languageModalTitle: "言語", themeDark: "ダーク", themeLight: "ライト", themeOcean: "オーシャン", modalClose: "閉じる", greetingMorning: "おはようございます", greetingNoon: "こんにちは", greetingAfternoon: "こんにちは", greetingEvening: "こんばんは", comingSoon: "近日公開", comingSoonTitle: "近日公開...", comingSoonText: "開発中です。", langTooltip: "言語", themeTooltip: "テーマ", historyTooltip: "履歴", newChatTooltip: "新規", modelMiniDesc: "高速", modelSmartDesc: "スマート", modelNerdDesc: "詳細"
+        sidebarHeader: "履歴", newChatTitle: "新規チャット", messagePlaceholder: "何でも聞いて...", aiTypingPlaceholder: "AI応答中...", footerText: "AIは間違うことがあります。", themeModalTitle: "テーマ", languageModalTitle: "言語", themeDark: "ダーク", themeLight: "ライト", themeOcean: "海", modalClose: "閉じる", greetingMorning: "おはよう", greetingNoon: "こんにちは", greetingAfternoon: "こんにちは", greetingEvening: "こんばんは", comingSoon: "近日公開", comingSoonTitle: "近日公開", comingSoonText: "開発中", langTooltip: "言語", themeTooltip: "テーマ", historyTooltip: "履歴", newChatTooltip: "新規", modelMiniDesc: "高速", modelSmartDesc: "スマート", modelNerdDesc: "詳細", randomButton: "ランダム", videoButton: "動画", learnButton: "学習"
     },
     fr: {
-        sidebarHeader: "Historique", newChatTitle: "Nouveau Chat", messagePlaceholder: "Demandez-moi tout...", aiTypingPlaceholder: "L'IA répond...", outOfTokensPlaceholder: "Épuisé", sendButton: "Envoyer", stopButton: "Arrêter", modelButtonDefault: "Expert", randomButton: "Aléatoire", videoButton: "Vidéo", learnButton: "Apprendre", footerText: "L'IA peut faire des erreurs.", themeModalTitle: "Thème", languageModalTitle: "Langue", themeDark: "Sombre", themeLight: "Clair", themeOcean: "Océan", modalClose: "Fermer", greetingMorning: "Bonjour", greetingNoon: "Bon après-midi", greetingAfternoon: "Bon après-midi", greetingEvening: "Bonsoir", comingSoon: "Bientôt", comingSoonTitle: "Bientôt...", comingSoonText: "En développement.", langTooltip: "Langue", themeTooltip: "Thème", historyTooltip: "Historique", newChatTooltip: "Nouveau", modelMiniDesc: "Rapide", modelSmartDesc: "Intelligent", modelNerdDesc: "Profond"
+        sidebarHeader: "Historique", newChatTitle: "Nouveau", messagePlaceholder: "Posez une question...", aiTypingPlaceholder: "L'IA écrit...", footerText: "L'IA peut se tromper.", themeModalTitle: "Thème", languageModalTitle: "Langue", themeDark: "Sombre", themeLight: "Clair", themeOcean: "Océan", modalClose: "Fermer", greetingMorning: "Bonjour", greetingNoon: "Bon après-midi", greetingAfternoon: "Bon après-midi", greetingEvening: "Bonsoir", comingSoon: "Bientôt", comingSoonTitle: "Bientôt...", comingSoonText: "En dév.", langTooltip: "Langue", themeTooltip: "Thème", historyTooltip: "Historique", newChatTooltip: "Nouveau", modelMiniDesc: "Rapide", modelSmartDesc: "Intelligent", modelNerdDesc: "Profond", randomButton: "Aléatoire", videoButton: "Vidéo", learnButton: "Apprendre"
     },
     es: {
-        sidebarHeader: "Historial", newChatTitle: "Nuevo Chat", messagePlaceholder: "¿Qué quieres saber?", aiTypingPlaceholder: "IA respondiendo...", outOfTokensPlaceholder: "Agotado", sendButton: "Enviar", stopButton: "Detener", modelButtonDefault: "Experto", randomButton: "Aleatorio", videoButton: "Video", learnButton: "Aprender", footerText: "La IA puede equivocarse.", themeModalTitle: "Tema", languageModalTitle: "Idioma", themeDark: "Oscuro", themeLight: "Claro", themeOcean: "Océano", modalClose: "Cerrar", greetingMorning: "Buenos días", greetingNoon: "Buenas tardes", greetingAfternoon: "Buenas tardes", greetingEvening: "Buenas noches", comingSoon: "Próximamente", comingSoonTitle: "Pronto...", comingSoonText: "En desarrollo.", langTooltip: "Idioma", themeTooltip: "Tema", historyTooltip: "Historial", newChatTooltip: "Nuevo", modelMiniDesc: "Rápido", modelSmartDesc: "Inteligente", modelNerdDesc: "Profundo"
+        sidebarHeader: "Historial", newChatTitle: "Nuevo Chat", messagePlaceholder: "Pregúntame...", aiTypingPlaceholder: "IA escribiendo...", footerText: "La IA puede errar.", themeModalTitle: "Tema", languageModalTitle: "Idioma", themeDark: "Oscuro", themeLight: "Claro", themeOcean: "Océano", modalClose: "Cerrar", greetingMorning: "Buenos días", greetingNoon: "Buenas tardes", greetingAfternoon: "Buenas tardes", greetingEvening: "Buenas noches", comingSoon: "Pronto", comingSoonTitle: "Pronto...", comingSoonText: "En desarrollo.", langTooltip: "Idioma", themeTooltip: "Tema", historyTooltip: "Historial", newChatTooltip: "Nuevo", modelMiniDesc: "Rápido", modelSmartDesc: "Inteligente", modelNerdDesc: "Profundo", randomButton: "Aleatorio", videoButton: "Video", learnButton: "Aprender"
     },
     hi: {
-        sidebarHeader: "इतिहास", newChatTitle: "नई चैट", messagePlaceholder: "मुझसे कुछ भी पूछें...", aiTypingPlaceholder: "AI उत्तर दे रहा है...", outOfTokensPlaceholder: "टोकन समाप्त", sendButton: "भेजें", stopButton: "रुकें", modelButtonDefault: "विशेषज्ञ", randomButton: "यादृच्छिक", videoButton: "वीडियो", learnButton: "सीखें", footerText: "AI गलतियां कर सकता है।", themeModalTitle: "थीम", languageModalTitle: "भाषा", themeDark: "डार्क", themeLight: "लाइट", themeOcean: "सागर", modalClose: "बंद करें", greetingMorning: "सुप्रभात", greetingNoon: "शुभ दोपहर", greetingAfternoon: "शुभ दोपहर", greetingEvening: "शुभ संध्या", comingSoon: "जल्द आ रहा है", comingSoonTitle: "जल्द...", comingSoonText: "विकास में।", langTooltip: "भाषा", themeTooltip: "थीम", historyTooltip: "इतिहास", newChatTooltip: "नई", modelMiniDesc: "तेज़", modelSmartDesc: "स्मार्ट", modelNerdDesc: "गहरा"
+        sidebarHeader: "इतिहास", newChatTitle: "नई चैट", messagePlaceholder: "कुछ भी पूछें...", aiTypingPlaceholder: "AI लिख रहा है...", footerText: "AI गलत हो सकता है।", themeModalTitle: "थीम", languageModalTitle: "भाषा", themeDark: "डार्क", themeLight: "लाइट", themeOcean: "सागर", modalClose: "बंद", greetingMorning: "नमस्ते", greetingNoon: "नमस्ते", greetingAfternoon: "नमस्ते", greetingEvening: "नमस्ते", comingSoon: "जल्द", comingSoonTitle: "जल्द...", comingSoonText: "विकास में।", langTooltip: "भाषा", themeTooltip: "थीम", historyTooltip: "इतिहास", newChatTooltip: "नई", modelMiniDesc: "तेज़", modelSmartDesc: "स्मार्ट", modelNerdDesc: "गहरा", randomButton: "रैंडम", videoButton: "वीडियो", learnButton: "सीखें"
     },
     it: {
-        sidebarHeader: "Cronologia", newChatTitle: "Nuova Chat", messagePlaceholder: "Chiedimi tutto...", aiTypingPlaceholder: "L'IA risponde...", outOfTokensPlaceholder: "Esaurito", sendButton: "Invia", stopButton: "Stop", modelButtonDefault: "Esperto", randomButton: "Casuale", videoButton: "Video", learnButton: "Impara", footerText: "L'IA può sbagliare.", themeModalTitle: "Tema", languageModalTitle: "Lingua", themeDark: "Scuro", themeLight: "Chiaro", themeOcean: "Oceano", modalClose: "Chiudi", greetingMorning: "Buongiorno", greetingNoon: "Buon pomeriggio", greetingAfternoon: "Buon pomeriggio", greetingEvening: "Buonasera", comingSoon: "Presto", comingSoonTitle: "Presto...", comingSoonText: "In sviluppo.", langTooltip: "Lingua", themeTooltip: "Tema", historyTooltip: "Cronologia", newChatTooltip: "Nuovo", modelMiniDesc: "Veloce", modelSmartDesc: "Intelligente", modelNerdDesc: "Profondo"
+        sidebarHeader: "Cronologia", newChatTitle: "Nuova Chat", messagePlaceholder: "Chiedimi...", aiTypingPlaceholder: "L'IA scrive...", footerText: "L'IA può sbagliare.", themeModalTitle: "Tema", languageModalTitle: "Lingua", themeDark: "Scuro", themeLight: "Chiaro", themeOcean: "Oceano", modalClose: "Chiudi", greetingMorning: "Buongiorno", greetingNoon: "Buon pomeriggio", greetingAfternoon: "Buon pomeriggio", greetingEvening: "Buonasera", comingSoon: "Presto", comingSoonTitle: "Presto...", comingSoonText: "In sviluppo.", langTooltip: "Lingua", themeTooltip: "Tema", historyTooltip: "Cronologia", newChatTooltip: "Nuovo", modelMiniDesc: "Veloce", modelSmartDesc: "Intelligente", modelNerdDesc: "Profondo", randomButton: "Casuale", videoButton: "Video", learnButton: "Impara"
     }
 };
 
-// Random Prompts Data
 const randomPrompts = {
-    vi: ["Giải thích lượng tử cho học sinh lớp 5", "Viết code Python tạo trò chơi Snake", "Làm thế nào để ngủ ngon hơn?", "Tóm tắt lịch sử Việt Nam thế kỷ 20", "Công thức nấu món Phở bò ngon"],
-    en: ["Explain quantum physics to a 5th grader", "Write Python code for Snake game", "How to get better sleep?", "Summarize Vietnam history in 20th century", "Recipe for delicious Beef Pho"],
-    zh: ["给小学生解释量子物理", "用Python写贪吃蛇游戏", "如何改善睡眠质量？", "总结20世纪越南历史", "美味牛肉粉的食谱"],
-    ja: ["量子力学を小学生に説明して", "Pythonでスネークゲームを書いて", "睡眠の質を上げる方法は？", "20世紀のベトナムの歴史を要約して", "美味しい牛肉のフォーのレシピ"],
-    fr: ["Explique la physique quantique à un enfant", "Code un jeu Snake en Python", "Comment mieux dormir ?", "Résumé de l'histoire du Vietnam au 20e siècle", "Recette du Pho au bœuf"],
-    es: ["Explica física cuántica a un niño", "Escribe un juego Snake en Python", "Cómo dormir mejor", "Resume la historia de Vietnam del siglo XX", "Receta de Pho de ternera"],
-    hi: ["5वीं कक्षा के छात्र को क्वांटम भौतिकी समझाएं", "स्नेक गेम के लिए पायथन कोड लिखें", "बेहतर नींद कैसे लें?", "20वीं सदी के वियतनाम इतिहास का सारांश", "स्वादिष्ट बीफ फो की विधि"],
-    it: ["Spiega la fisica quantistica a un bambino", "Scrivi il gioco Snake in Python", "Come dormire meglio?", "Riassumi la storia del Vietnam del XX secolo", "Ricetta per un buon Pho al manzo"]
+    vi: ["Giải thích lượng tử?", "Code game rắn săn mồi", "Cách ngủ ngon?", "Tóm tắt lịch sử VN", "Công thức phở bò"],
+    en: ["Explain quantum physics?", "Code Snake game", "How to sleep better?", "Vietnam history summary", "Beef Pho recipe"],
+    zh: ["解释量子物理", "贪吃蛇代码", "如何助眠", "越南历史概要", "牛肉粉食谱"],
+    ja: ["量子力学とは？", "スネークゲームのコード", "睡眠改善法", "ベトナムの歴史", "フォーのレシピ"],
+    fr: ["Physique quantique ?", "Jeu Snake code", "Mieux dormir ?", "Histoire Vietnam", "Recette Pho"],
+    es: ["¿Física cuántica?", "Código juego Snake", "Dormir mejor", "Historia Vietnam", "Receta Pho"],
+    hi: ["क्वांटम भौतिकी?", "स्नेक गेम कोड", "बेहतर नींद", "वियतनाम इतिहास", "फो रेसिपी"],
+    it: ["Fisica quantistica?", "Codice Snake", "Dormire meglio", "Storia Vietnam", "Ricetta Pho"]
 };
 
 // Theme Colors
@@ -330,9 +329,10 @@ function applyTheme(theme) {
 
 function switchLanguage(lang) {
     currentLang = lang; 
-    const t = translations[lang] || translations['en']; // Fallback to English if missing
+    const t = translations[lang] || translations['en']; 
     const setText = (el, txt) => { if(el) el.textContent = txt; };
     
+    // Dịch các thành phần chính
     setText(textElements.sidebarHeader, t.sidebarHeader);
     if(textElements.input) textElements.input.placeholder = t.messagePlaceholder;
     setText(textElements.footer, t.footerText);
@@ -347,15 +347,13 @@ function switchLanguage(lang) {
     setText(textElements.comingSoonText, t.comingSoonText);
     setText(textElements.closeComingSoonModal, t.modalClose);
     
-    // Tooltips
-    const setTooltip = (el, txt) => { if(el) { el.setAttribute('title', txt); } }; 
-    // Nếu bạn dùng thư viện tooltip riêng, hãy cập nhật logic tại đây. Nếu dùng title mặc định:
+    // Dịch Tooltips & Text phụ
+    const setTooltip = (el, txt) => { if(el) el.title = txt; };
     setTooltip(randomPromptBtn, t.randomButton);
     setTooltip(videoBtn, t.videoButton);
     setTooltip(learnBtn, t.learnButton);
     setTooltip(langSwitchBtn, t.langTooltip);
-    
-    // Nếu element có text node riêng (như tooltip giả lập bằng span/div)
+
     setText(textElements.randomTooltip, t.randomButton);
     setText(textElements.videoTooltip, t.videoButton);
     setText(textElements.learnTooltip, t.learnButton);
@@ -575,7 +573,6 @@ function createMessageElement(messageContent, sender) {
     return row;
 }
 
-// Math Render Safety
 function renderMath(element) {
     if (typeof window.renderMathInElement === 'function') {
         window.renderMathInElement(element, {
@@ -888,16 +885,18 @@ function setActiveHistoryItem(chatId) {
     });
 }
 
+// --- KHỞI CHẠY (DOMContentLoaded) ---
 document.addEventListener('DOMContentLoaded', () => {
     const theme = localStorage.getItem('theme') || 'dark';
     const lang = localStorage.getItem('language') || 'vi';
 
-    // --- [NÂNG CẤP] THAY ĐỔI ICON SEND BUTTON (ARROW UP) ---
+    // --- [MỚI] SET ARROW ICON NGAY LẬP TỨC ---
     if(sendButton) {
+        // SVG Arrow Up Icon
         sendButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" /></svg>`;
     }
 
-    switchLanguage(lang);
+    switchLanguage(lang); // Dịch các thành phần khác (trừ nút Gửi)
     applyTheme(theme);
     initializeApp();
     initTokenSystem();
