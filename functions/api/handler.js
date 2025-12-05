@@ -1,1254 +1,267 @@
-// script.js
+// functions/api/handler.js
 
-//=====================================================================//
-// 1. LOGIC BẢO MẬT & KHỞI TẠO CƠ BẢN                                  //
-//=====================================================================//
-
-try {
-    if (localStorage.getItem('isLocked') === 'true') {
-        window.location.href = 'verify.html';
-        throw new Error("App is locked requiring verification."); 
-    }
-} catch (e) {
-    console.error("Security check error:", e);
-}
-
-// Helper: Copy Code
-window.copyToClipboard = function(btn) {
-    try {
-        const header = btn.closest('.code-box-header');
-        if (!header) return;
-        const contentDiv = header.nextElementSibling;
-        if (!contentDiv) return;
-        const codeElement = contentDiv.querySelector('code');
-        if (!codeElement) return;
-
-        const codeText = codeElement.innerText;
-        navigator.clipboard.writeText(codeText).then(() => {
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = `<span class="text-green-400 font-bold">Copied!</span>`;
-            setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
-        });
-    } catch (e) { console.error("Copy failed:", e); }
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Title',
 };
 
-// Cấu hình Token
-const tokenConfig = {
-    IS_INFINITE: true,           
-    MAX_TOKENS: 50,              
-    TOKEN_COST_PER_MESSAGE: 1,   
-    TOKEN_REGEN_INTERVAL_MINUTES: 5, 
-    TOKEN_REGEN_AMOUNT: 1,       
-};
+// --- CONFIGURATION ---
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const EXA_API_URL = 'https://api.exa.ai/search';
+const DECISION_MODEL = 'arcee-ai/trinity-mini:free'; 
 
-//=====================================================================//
-// 2. DOM ELEMENTS & STATE                                             //
-//=====================================================================//
-
-const getEl = (id) => document.getElementById(id);
-const textElements = {
-    header: getEl('header-title'),
-    main: getEl('main-title'),
-    input: getEl('message-input'),
-    footer: getEl('footer-text'),
-    themeIcon: getEl('theme-icon'),
-    logoText: getEl('logo-text'),
-    sidebarHeader: getEl('sidebar-header'),
-    modelBtnText: getEl('model-button-text-display'),
-    themeModalTitle: getEl('theme-modal-title'),
-    languageModalTitle: getEl('language-modal-title'),
-    themeDarkText: getEl('theme-dark-text'),
-    themeLightText: getEl('theme-light-text'),
-    themeOceanText: getEl('theme-ocean-text'),
-    closeModalButton: getEl('close-modal-button'),
-    closeLanguageModalBtn: getEl('close-language-modal-button'),
-    comingSoonTitle: getEl('coming-soon-title'),
-    comingSoonText: getEl('coming-soon-text'),
-    closeComingSoonModal: getEl('close-coming-soon-modal'),
-    randomTooltip: getEl('random-tooltip'),
-    videoTooltip: getEl('video-tooltip'),
-    learnTooltip: getEl('learn-tooltip'),
-    langTooltip: getEl('lang-tooltip'),
-    themeTooltip: getEl('theme-tooltip'),
-    historyTooltip: getEl('history-tooltip'),
-    newChatTooltip: getEl('new-chat-tooltip'),
-};
-
-const themeMenuButton = getEl('theme-menu-button');
-const themeModal = getEl('theme-modal');
-const themeOptionButtons = document.querySelectorAll('.theme-option');
-const languageModal = getEl('language-modal');
-const languageOptionButtons = document.querySelectorAll('.language-option');
-const langSwitchBtn = getEl('lang-switch-btn');
-
-const body = document.body;
-const backgroundContainer = getEl('background-container');
-const chatFormEl = getEl('chat-form');
-const oceanImageUrl = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1173&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
-
-const sidebar = getEl('sidebar');
-const sidebarToggle = getEl('sidebar-toggle');
-const historyList = getEl('history-list');
-const newChatHeaderBtn = getEl('new-chat-header-btn');
-const sendButton = getEl('send-button');
-const soundWaveButton = getEl('sound-wave-button');
-const stopButton = getEl('stop-button');
-const messageInput = getEl('message-input');
-const randomPromptBtn = getEl('random-prompt-icon-btn');
-const videoBtn = getEl('video-icon-btn');
-const learnBtn = getEl('learn-icon-btn');
-const modelButton = getEl('model-button');
-const modelPopup = getEl('model-popup');
-
-const uploadFileBtn = getEl('upload-file-btn');
-const fileInput = getEl('file-input');
-const fileThumbnailContainer = getEl('file-thumbnail-container');
-
-// State Variables
-let stagedFile = null;
-let currentLang = 'vi';
-let isTutorMode = localStorage.getItem('isTutorMode') === 'true';
-let abortController;
-let isRandomPromptUsedInSession = false;
-let conversationHistory = [];
-let chatHistories = {};
-let currentChatId = null;
-
-let currentModel;
-try {
-    currentModel = JSON.parse(localStorage.getItem('currentModel'));
-} catch (e) { currentModel = null; }
-if (!currentModel) currentModel = { model: 'Mini', version: '' };
-
-const translations = {
-    vi: {
-        sidebarHeader: "Lịch sử Chat", newChatTitle: "Chat mới", messagePlaceholder: "Bạn muốn biết gì?", aiTypingPlaceholder: "AI đang trả lời...", outOfTokensPlaceholder: "Bạn đã hết lượt.", sendButton: "Gửi", stopButton: "Dừng", modelButtonDefault: "Expert", modelButtonPrefix: "Mô Hình", randomButton: "Ngẫu nhiên", videoButton: "Tạo Video", learnButton: "Học Tập", footerText: "AI có thể mắc lỗi. Hãy kiểm tra thông tin quan trọng.", themeModalTitle: "Chọn Giao Diện", languageModalTitle: "Chọn Ngôn Ngữ", themeDark: "Tối", themeLight: "Sáng", themeOcean: "Biển", modalClose: "Đóng", newChatHistory: "Cuộc trò chuyện mới", greetingMorning: "Chào buổi sáng", greetingNoon: "Chào buổi trưa", greetingAfternoon: "Chào buổi chiều", greetingEvening: "Chào buổi tối", errorPrefix: "Đã có lỗi xảy ra", comingSoon: "Sắp có", comingSoonTitle: "Sắp có...", comingSoonText: "Tính năng này đang được phát triển.", langTooltip: "Đổi Ngôn Ngữ", themeTooltip: "Đổi Giao Diện", historyTooltip: "Lịch Sử Chat", newChatTooltip: "Chat Mới", modelMiniDesc: "Nhanh và hiệu quả.", modelSmartDesc: "Cân bằng tốc độ và thông minh.", modelNerdDesc: "Suy luận cao, kết quả chuẩn xác."
-    },
-    en: {
-        sidebarHeader: "Chat History", newChatTitle: "New Chat", messagePlaceholder: "What do you want to know?", aiTypingPlaceholder: "AI is replying...", outOfTokensPlaceholder: "You're out of tokens.", sendButton: "Send", stopButton: "Stop", modelButtonDefault: "Expert", modelButtonPrefix: "Model", randomButton: "Random", videoButton: "Create Video", learnButton: "Study", footerText: "AI can make mistakes. Check important info.", themeModalTitle: "Choose Theme", languageModalTitle: "Select Language", themeDark: "Dark", themeLight: "Light", themeOcean: "Ocean", modalClose: "Close", newChatHistory: "New Conversation", greetingMorning: "Good morning", greetingNoon: "Good afternoon", greetingAfternoon: "Good afternoon", greetingEvening: "Good evening", errorPrefix: "An error occurred", comingSoon: "Coming Soon", comingSoonTitle: "Coming Soon...", comingSoonText: "Under development.", langTooltip: "Switch Language", themeTooltip: "Change Theme", historyTooltip: "Chat History", newChatTooltip: "New Chat", modelMiniDesc: "Fast and efficient.", modelSmartDesc: "Balanced speed and intelligence.", modelNerdDesc: "Powerful model for complex answers."
-    },
-};
-['zh', 'hi', 'es', 'fr', 'ja', 'it'].forEach(lang => { if(!translations[lang]) translations[lang] = translations['en']; });
-
-const themeColors = {
-    dark: {
-        bg: ['bg-gradient-to-br', 'from-[#212935]', 'to-black'],
-        text: 'text-gray-100',
-        subtleText: 'text-gray-400',
-        logo: 'text-gray-100',
-        iconColor: 'text-gray-300',
-        popup: ['bg-gray-900', 'border', 'border-gray-700'],
-        popupButton: ['text-gray-300', 'hover:bg-white/10', 'hover:text-white'],
-        sidebar: ['bg-black/10', 'border-white/10'],
-        historyActive: ['bg-blue-800/50'],
-        historyHover: ['hover:bg-blue-800/30'],
-        form: ['bg-black/30', 'border-white/20'],
-        headerPill: [],
-        aiMessage: ['text-gray-100'],
-        userMessage: ['bg-blue-600', 'text-white'],
-        inputColor: ['text-gray-200', 'placeholder-gray-500']
-    },
-    light: {
-        bg: ['bg-white'],
-        text: 'text-black',
-        subtleText: 'text-gray-600',
-        logo: 'text-blue-500',
-        iconColor: 'text-gray-800',
-        popup: ['bg-white', 'border', 'border-gray-200', 'shadow-lg'],
-        popupButton: ['text-gray-700', 'hover:bg-gray-100'],
-        sidebar: ['bg-gray-50', 'border-r', 'border-gray-200'],
-        historyActive: ['bg-blue-100'],
-        historyHover: ['hover:bg-gray-200'],
-        form: ['bg-gray-100', 'border', 'border-gray-300', 'shadow'],
-        headerPill: [],
-        aiMessage: ['text-black'],
-        userMessage: ['bg-blue-500', 'text-white'],
-        inputColor: ['text-black', 'placeholder-gray-400']
-    },
-    ocean: {
-        bgImage: `url('${oceanImageUrl}')`,
-        text: 'text-white',
-        subtleText: 'text-gray-300',
-        logo: 'text-white',
-        iconColor: 'text-white',
-        popup: ['bg-black/70', 'backdrop-blur-md', 'border', 'border-white/10'],
-        popupButton: ['text-gray-300', 'hover:bg-white/10', 'hover:text-white'],
-        sidebar: ['bg-black/10', 'border-white/10'],
-        historyActive: ['bg-white/20'],
-        historyHover: ['hover:bg-white/10'],
-        form: ['bg-black/30', 'border-white/20'],
-        headerPill: ['bg-black/30', 'backdrop-blur-lg', 'border', 'border-white/20'],
-        aiMessage: ['text-white'],
-        userMessage: ['bg-blue-500', 'text-white'],
-        inputColor: ['text-white', 'placeholder-gray-300']
-    }
-};
-
-//=====================================================================//
-// 3. CORE FUNCTIONS                                                   //
-//=====================================================================//
-
-function escapeHTML(str) {
-    if (!str) return '';
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+// ----------------------------
+// Helpers
+// ----------------------------
+async function safeFetch(url, opts = {}, ms = 20000) { // Tăng timeout lên 20s
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  try {
+    const res = await fetch(url, { ...opts, signal: controller.signal });
+    clearTimeout(id);
+    return res;
+  } catch (e) {
+    clearTimeout(id);
+    throw e;
+  }
 }
 
-function saveStateToLocalStorage() {
-    try {
-        const historiesToSave = { ...chatHistories };
-        if (historiesToSave[currentChatId] && historiesToSave[currentChatId].length === 0) {
-            delete historiesToSave[currentChatId];
-        }
-        localStorage.setItem('chatHistories', JSON.stringify(historiesToSave));
-        localStorage.setItem('currentChatId', currentChatId);
-    } catch(e) { console.error("Save error:", e); }
+function cleanResponse(text) {
+    if (!text) return "";
+    let cleaned = text.replace(/<\|.*?\|>/g, ""); 
+    cleaned = cleaned.replace(/\{"query":.*?\}/g, "");
+    return cleaned.trim();
 }
 
-function initializeApp() {
-    const savedHistories = localStorage.getItem('chatHistories');
-    if (savedHistories) {
-        try {
-            chatHistories = JSON.parse(savedHistories);
-        } catch(e) { chatHistories = {}; }
-    } else {
-        chatHistories = {};
-    }
-    startNewChat(); 
+// ----------------------------
+// 1. SMART ROUTER
+// ----------------------------
+async function analyzeRequest(userPrompt, apiKey, debugSteps) {
+  const lower = userPrompt.toLowerCase();
+
+  // SKIP RULES
+  const skipTriggers = [
+      'viết', 'write', 'dịch', 'translate', 'code', 'lập trình', 'tính', 'calculate', 
+      'giải', 'solve', 'tạo', 'create', 'sáng tác', 'compose', 'check', 'kiểm tra lỗi',
+      'viet', 'dich', 'lap trinh', 'tinh', 'giai', 'tao', 'sang tac', 'kiem tra', 'sua loi'
+  ];
+  if (skipTriggers.some(w => lower.startsWith(w))) {
+      debugSteps.push({ router: 'skip_rule', msg: 'Skipping search' });
+      return { needed: false, query: '' };
+  }
+
+  // FORCE RULES
+  const forceTriggers = [
+      'address', 'location', 'weather', 'price', 'news', 'latest', 'who is', 'what is', 'review',
+      'địa chỉ', 'ở đâu', 'chỗ nào', 'thời tiết', 'giá', 'tin tức', 'sự kiện', 'hôm nay', 
+      'mới nhất', 'là gì', 'bao nhiêu', 'tỷ giá', 'kết quả', 'lịch thi đấu',
+      'dia chi', 'o dau', 'cho nao', 'thoi tiet', 'gia', 'tin tuc', 'su kien', 'hom nay', 'hnay',
+      'moi nhat', 'la gi', 'bao nhieu', 'ty gia', 'ket qua', 'lich thi dau', 'review'
+  ];
+
+  if (forceTriggers.some(w => lower.includes(w))) {
+      debugSteps.push({ router: 'force_rule', msg: 'Forcing search' });
+      return { needed: true, query: userPrompt };
+  }
+
+  // AI DECISION
+  if (!apiKey) return { needed: false, query: '' };
+
+  try {
+    const payload = {
+      model: DECISION_MODEL,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: 'system', content: 'Return JSON { "needed": boolean, "query": "string" }. True for Real-Time Facts/News/Weather. False for Chat/Code/Math.' },
+        { role: 'user', content: userPrompt }
+      ],
+      max_tokens: 50,
+      temperature: 0
+    };
+    
+    const res = await safeFetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(payload)
+    }, 5000);
+    
+    if (!res.ok) throw new Error('Router API failed');
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content || '{}';
+    let parsed;
+    try { parsed = JSON.parse(content); } catch (e) { parsed = { needed: false, query: userPrompt }; }
+    debugSteps.push({ router: 'ai_decision', output: parsed });
+    return parsed;
+  } catch (e) {
+    return { needed: false, query: userPrompt };
+  }
 }
 
-function applyTheme(theme) {
-    if (!themeColors[theme]) theme = 'dark';
-    body.className = "flex flex-col h-screen overflow-hidden transition-colors duration-500";
-    backgroundContainer.className = "fixed inset-0 -z-10 transition-all duration-500 bg-cover bg-center";
-    backgroundContainer.style.backgroundImage = '';
-    const config = themeColors[theme];
-    const allConfigs = Object.values(themeColors);
-
-    themeOptionButtons.forEach(btn => {
-        btn.classList.remove('bg-blue-500/20');
-        if (btn.dataset.theme === theme) btn.classList.add('bg-blue-500/20');
-    });
-
-    body.classList.remove(...allConfigs.flatMap(c => c.bg).flat());
-    if (config.bgImage) {
-        backgroundContainer.style.backgroundImage = config.bgImage;
-        backgroundContainer.classList.add('image-overlay');
-    } else {
-        body.classList.add(...config.bg);
-        backgroundContainer.classList.remove('image-overlay');
+// ----------------------------
+// 2. SEARCH LAYER (Exa.ai)
+// ----------------------------
+async function searchExa(query, apiKey, debugSteps) {
+    if (!apiKey) {
+        debugSteps.push({ exa_error: 'MISSING_API_KEY' });
+        return null;
     }
-    
-    body.classList.remove(...allConfigs.map(c => c.text));
-    body.classList.add(config.text);
-
-    if(textElements.logoText) {
-        textElements.logoText.classList.remove(...allConfigs.map(c => c.logo));
-        textElements.logoText.classList.add(config.logo);
-    }
-
-    if(sidebar) {
-        sidebar.classList.remove(...allConfigs.flatMap(c => c.sidebar || []).flat());
-        sidebar.classList.add(...(config.sidebar || []));
-    }
-    if(chatFormEl) {
-        chatFormEl.classList.remove(...allConfigs.flatMap(c => c.form || []).flat());
-        chatFormEl.classList.add(...(config.form || []));
-    }
-    document.querySelectorAll('.header-pill-container').forEach(pill => {
-        pill.classList.remove(...allConfigs.flatMap(c => c.headerPill || []).flat());
-        pill.classList.add(...(config.headerPill || []));
-    });
-
-    const themeableIconEls = [
-        sidebarToggle ? sidebarToggle.querySelector('svg') : null, 
-        newChatHeaderBtn ? newChatHeaderBtn.querySelector('svg') : null,
-        langSwitchBtn, getEl('theme-icon'),
-        randomPromptBtn ? randomPromptBtn.querySelector('svg') : null, 
-        videoBtn ? videoBtn.querySelector('svg') : null, 
-        learnBtn ? learnBtn.querySelector('svg') : null, 
-        uploadFileBtn ? uploadFileBtn.querySelector('svg') : null
-    ];
-    themeableIconEls.forEach(el => {
-        if (el) {
-            el.classList.remove(...allConfigs.map(c => c.iconColor));
-            el.classList.add(config.iconColor);
-        }
-    });
-    
-    if(messageInput) {
-        messageInput.classList.remove(...allConfigs.flatMap(c => c.inputColor || []).flat());
-        messageInput.classList.add(...(config.inputColor || []));
-    }
-
-    if(textElements.footer) {
-        textElements.footer.classList.remove(...allConfigs.map(c => c.subtleText));
-        textElements.footer.classList.add(config.subtleText);
-    }
-    const tokenDisplayIcon = document.querySelector('#token-display svg');
-    if(tokenDisplayIcon) {
-        tokenDisplayIcon.classList.remove(...allConfigs.map(c => c.iconColor));
-        tokenDisplayIcon.classList.add(config.iconColor);
-    }
-
-    if(modelPopup) {
-        modelPopup.classList.remove(...allConfigs.flatMap(c => c.popup).flat());
-        modelPopup.classList.add(...config.popup);
-    }
-
-    const chatContainer = getEl('chat-container');
-    if (chatContainer) {
-        const aiMessages = chatContainer.querySelectorAll('.ai-message-wrapper');
-        const allAiMessageClasses = allConfigs.flatMap(c => c.aiMessage || []).flat();
-        aiMessages.forEach(msg => {
-            msg.classList.remove(...allAiMessageClasses);
-            msg.classList.add(...config.aiMessage);
-        });
-        const userMessages = chatContainer.querySelectorAll('.user-message-wrapper');
-        const allUserMessageClasses = allConfigs.flatMap(c => c.userMessage || []).flat();
-        userMessages.forEach(msg => {
-            msg.classList.remove(...allUserMessageClasses);
-            msg.classList.add(...config.userMessage);
-        });
-    }
-
-    localStorage.setItem('theme', theme);
-    renderHistoryList();
-    updateLearnButtonVisualState();
-}
-
-function switchLanguage(lang) {
-    currentLang = lang;
-    const t = translations[lang] || translations['vi'];
-    const setText = (el, txt) => { if(el) el.textContent = txt; };
-    const setAttr = (el, attr, txt) => { if(el) el[attr] = txt; };
-
-    setText(textElements.sidebarHeader, t.sidebarHeader);
-    setAttr(textElements.input, 'placeholder', t.messagePlaceholder);
-    setText(textElements.footer, t.footerText);
-    setText(textElements.themeModalTitle, t.themeModalTitle);
-    setText(textElements.languageModalTitle, t.languageModalTitle);
-    setText(textElements.themeDarkText, t.themeDark);
-    setText(textElements.themeLightText, t.themeLight);
-    setText(textElements.themeOceanText, t.themeOcean);
-    if(textElements.closeModalButton) setText(textElements.closeModalButton, t.modalClose);
-    if(textElements.closeLanguageModalBtn) setText(textElements.closeLanguageModalBtn, t.modalClose);
-    setText(textElements.comingSoonTitle, t.comingSoonTitle);
-    setText(textElements.comingSoonText, t.comingSoonText);
-    if(textElements.closeComingSoonModal) setText(textElements.closeComingSoonModal, t.modalClose);
-    setText(textElements.randomTooltip, t.randomButton);
-    setText(textElements.videoTooltip, t.videoButton);
-    setText(textElements.learnTooltip, t.learnButton);
-    setText(textElements.langTooltip, t.langTooltip);
-    setText(textElements.themeTooltip, t.themeTooltip);
-    setText(textElements.historyTooltip, t.historyTooltip);
-    setText(textElements.newChatTooltip, t.newChatTooltip);
-
-    if(langSwitchBtn) langSwitchBtn.textContent = lang.toUpperCase();
-    document.documentElement.lang = lang;
-    localStorage.setItem('language', lang);
-    
-    languageOptionButtons.forEach(btn => {
-        btn.classList.remove('bg-blue-500/20', 'text-blue-600');
-        if (btn.dataset.lang === lang) btn.classList.add('bg-blue-500/20', 'text-blue-600');
-    });
-
-    updateModelButtonText();
-    setGreeting();
-    renderHistoryList();
-    updateTokenUI();
-}
-
-function setGreeting() {
-    const mainTitle = getEl('main-title');
-    if (!mainTitle) return;
-    const now = new Date();
-    const hour = now.getHours();
-    const t = translations[currentLang] || translations['vi'];
-    let greeting = '';
-    if (hour >= 5 && hour < 11) greeting = t.greetingMorning;
-    else if (hour >= 11 && hour < 14) greeting = t.greetingNoon;
-    else if (hour >= 14 && hour < 18) greeting = t.greetingAfternoon;
-    else greeting = t.greetingEvening;
-    mainTitle.textContent = greeting;
-}
-
-let isModalAnimating = false;
-function showModal(modal, show) {
-    if(!modal) return;
-    if (isModalAnimating && (modal === themeModal || modal === languageModal)) return;
-    isModalAnimating = true;
-    const content = modal.querySelector('div[id$="-content"]');
-    if (show) {
-        modal.classList.remove('hidden');
-        if(content) {
-            content.classList.remove('modal-fade-leave');
-            content.classList.add('modal-fade-enter');
-        }
-    } else {
-        if(content) {
-            content.classList.remove('modal-fade-enter');
-            content.classList.add('modal-fade-leave');
-        }
-    }
-    setTimeout(() => {
-        if (!show) modal.classList.add('hidden');
-        isModalAnimating = false;
-    }, 300);
-}
-
-if(themeMenuButton) themeMenuButton.addEventListener('click', () => showModal(themeModal, true));
-if(textElements.closeModalButton) textElements.closeModalButton.addEventListener('click', () => showModal(themeModal, false));
-if(themeModal) themeModal.addEventListener('click', (e) => { if(e.target === themeModal) showModal(themeModal, false); });
-
-themeOptionButtons.forEach(button => {
-    button.addEventListener('click', () => {
-        const theme = button.getAttribute('data-theme');
-        applyTheme(theme);
-        showModal(themeModal, false);
-    });
-});
-
-if(langSwitchBtn) langSwitchBtn.addEventListener('click', () => showModal(languageModal, true));
-if(textElements.closeLanguageModalBtn) textElements.closeLanguageModalBtn.addEventListener('click', () => showModal(languageModal, false));
-if(languageModal) languageModal.addEventListener('click', (e) => { if(e.target === languageModal) showModal(languageModal, false); });
-
-languageOptionButtons.forEach(button => {
-    button.addEventListener('click', () => {
-        const lang = button.getAttribute('data-lang');
-        switchLanguage(lang);
-        showModal(languageModal, false);
-    });
-});
-
-if(sidebarToggle && sidebar) sidebarToggle.addEventListener('click', () => {
-    sidebar.classList.toggle('-translate-x-full');
-    sidebar.classList.toggle('hidden');
-});
-
-function updateModelButtonText() {
-    const t = translations[currentLang] || translations['vi'];
-    if (!textElements.modelBtnText) return;
-    if (currentModel && currentModel.model) {
-        textElements.modelBtnText.textContent = currentModel.model;
-    } else {
-         textElements.modelBtnText.textContent = t.modelButtonDefault;
-    }
-}
-
-const createModelButton = (text, description, model, version = '', iconSvg) => {
-    const theme = localStorage.getItem('theme') || 'dark';
-    const themeConfig = themeColors[theme] || themeColors['dark'];
-    const button = document.createElement('button');
-    button.className = 'w-full text-left p-2 rounded-lg transition-colors duration-200 flex items-center justify-between btn-interaction';
-    if(themeConfig.popupButton) button.classList.add(...themeConfig.popupButton);
-    
-    button.dataset.model = model;
-    if (version) button.dataset.version = version;
-    
-    const leftContainer = document.createElement('div');
-    leftContainer.className = 'flex items-center gap-3';
-    
-    const iconContainer = document.createElement('div');
-    iconContainer.innerHTML = iconSvg;
-    leftContainer.appendChild(iconContainer);
-    
-    const textContainer = document.createElement('div');
-    textContainer.className = 'flex flex-col';
-    
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'font-semibold leading-tight';
-    nameSpan.textContent = text;
-    textContainer.appendChild(nameSpan);
-    
-    const descSpan = document.createElement('span');
-    const descColor = theme === 'light' ? 'text-gray-500' : 'text-gray-400';
-    descSpan.className = `text-xs ${descColor} leading-tight`;
-    descSpan.textContent = description;
-    textContainer.appendChild(descSpan);
-    
-    leftContainer.appendChild(textContainer);
-    button.appendChild(leftContainer);
-    
-    const checkmarkContainer = document.createElement('div');
-    checkmarkContainer.innerHTML = `<svg class="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>`;
-    
-    const isSelected = currentModel && currentModel.model === model && (!version || currentModel.version === version);
-    if (!isSelected) checkmarkContainer.classList.add('hidden');
-    
-    button.appendChild(checkmarkContainer);
-    return button;
-};
-
-const showInitialModels = () => {
-    if(!modelPopup) return;
-    modelPopup.innerHTML = '';
-    const t = translations[currentLang] || translations['vi'];
-    const iconThunder = `<svg class="w-6 h-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>`;
-    const iconLightbulb = `<svg class="w-6 h-6 text-amber-300" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.311a7.5 7.5 0 01-7.5 0c-1.255 0-2.443-.29-3.5-.832a7.5 7.5 0 0114.5.032c-.318.13-.644.242-.984.326a7.5 7.5 0 01-4.016.033z" /></svg>`;
-    const iconBrain = `<svg class="w-6 h-6 text-pink-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>`;
-    
-    const models = [
-        { text: 'Mini', description: t.modelMiniDesc, model: 'Mini', version: '', icon: iconThunder },
-        { text: 'Smart', description: t.modelSmartDesc, model: 'Smart', version: '', icon: iconLightbulb },
-        { text: 'Nerd', description: t.modelNerdDesc, model: 'Nerd', version: '', icon: iconBrain },
-    ];
-    
-    models.forEach(m => {
-        const btn = createModelButton(m.text, m.description, m.model, m.version, m.icon);
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            currentModel = { model: m.model, version: m.version || null };
-            localStorage.setItem('currentModel', JSON.stringify(currentModel));
-            updateModelButtonText();
-            if(modelPopup) modelPopup.classList.add('hidden');
-        });
-        modelPopup.appendChild(btn);
-    });
-};
-
-if(modelButton) {
-    modelButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showInitialModels();
-        if(modelPopup) modelPopup.classList.toggle('hidden');
-    });
-}
-document.addEventListener('click', (e) => {
-    if (modelButton && modelPopup && !modelButton.contains(e.target) && !modelPopup.contains(e.target)) {
-        modelPopup.classList.add('hidden');
-    }
-});
-
-//=====================================================================//
-// 4. CHAT LOGIC & RENDER                                              //
-//=====================================================================//
-
-function shouldShowSearchStatus(text) {
-    if (!text) return false;
-    const skipRegex = /(giải toán|code|lập trình|javascript|python|html|css|fix bug|lỗi|logic|ngữ pháp|tiếng anh|viết văn|viết mail|văn mẫu|kiến thức chung|trái đất|mặt trời|định nghĩa|khái niệm|công thức|tính toán|giai toan|lap trinh|ngu phap|viet van|van mau|kien thuc chung|trai dat|mat troi|dinh nghia|khai niem|cong thuc|tinh toan)/i;
-    const mustSearchRegex = /(địa chỉ|quán|nhà hàng|ở đâu|gần đây|thời tiết|hôm nay|ngày mai|tin tức|sự kiện|giá|tỷ giá|vàng|crypto|coin|bitcoin|eth|giờ mở cửa|giao thông|kẹt xe|dia chi|quan|nha hang|o dau|gan day|thoi tiet|hom nay|ngay mai|tin tuc|su kien|gia|ty gia|vang|gio mo cua|giao thong|ket xe|hiện tại|bây giờ|hien tai|bay gio)/i;
-    if (skipRegex.test(text)) return false;
-    return mustSearchRegex.test(text);
-}
-
-function startNewChat() {
-    currentChatId = Date.now().toString();
-    conversationHistory = [];
-    chatHistories[currentChatId] = conversationHistory;
-    
-    const chatContainer = getEl('chat-container');
-    if(chatContainer) chatContainer.innerHTML = '';
-    const initialView = getEl('initial-view');
-    const mainContent = getEl('mainContent');
-    
-    if(initialView) initialView.classList.remove('hidden');
-    if(chatContainer) chatContainer.classList.add('hidden');
-    if(mainContent) {
-        mainContent.classList.add('justify-center');
-        mainContent.classList.remove('justify-start');
-    }
-    setGreeting();
-    isRandomPromptUsedInSession = false; 
-    updateRandomButtonVisibility();
-    renderHistoryList();
-    setActiveHistoryItem(currentChatId);
-    saveStateToLocalStorage();
-}
-
-function updateRandomButtonVisibility() {
-    if (conversationHistory.length === 0 && !isRandomPromptUsedInSession) {
-        if(randomPromptBtn) randomPromptBtn.classList.remove('hidden');
-    } else {
-        if(randomPromptBtn) randomPromptBtn.classList.add('hidden');
-    }
-}
-
-// HÀM FORMAT AI RESPONSE (ĐÃ CẬP NHẬT ĐỂ HIỂN THỊ SOURCE PILL)
-function formatAIResponse(text) {
-    if (!text) return '';
-    const codeBlocks = [];
-    let processedText = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
-        const index = codeBlocks.length;
-        codeBlocks.push({ lang: lang || 'code', code: code });
-        return `__CODE_BLOCK_${index}__`; 
-    });
-
-    // --- SOURCE PILL REGEX ---
-    const sourceRegex = /\*\*\[([^\]]+)\]\(([^)]+)\)\*\*/g;
-    processedText = processedText.replace(sourceRegex, (match, name, url) => {
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="source-pill" title="Nguồn: ${name}">${name}</a>`;
-    });
-    // -------------------------
-
-    processedText = processedText.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-blue-400">$1</strong>');
-    processedText = processedText.replace(/^##\s+(.*)$/gm, '<h2 class="text-xl font-bold mt-4 mb-2 border-b border-gray-500/50 pb-1">$1</h2>');
-    processedText = processedText.replace(/^###\s+(.*)$/gm, '<h3 class="text-lg font-bold mt-3 mb-1">$1</h3>');
-    
-    const tableRegex = /\|(.+)\|\n\|([-:| ]+)\|\n((?:\|.*\|\n?)*)/g;
-    processedText = processedText.replace(tableRegex, (match, header, separator, body) => {
-        try {
-            const safeHeader = header || "";
-            const headers = safeHeader.split('|').filter(h => h.trim() !== '').map(h => `<th class="px-4 py-2 bg-gray-700 border border-gray-600 font-semibold text-white">${h.trim()}</th>`).join('');
-            
-            const safeBody = body || "";
-            const rows = safeBody.trim().split('\n').map(row => {
-                const cells = row.split('|').filter(c => c.trim() !== '').map(c => `<td class="px-4 py-2 border border-gray-600 text-gray-200">${c.trim()}</td>`).join('');
-                return `<tr class="hover:bg-gray-700/50 transition-colors">${cells}</tr>`;
-            }).join('');
-            
-            return `<div class="overflow-x-auto my-3 rounded-lg shadow-lg"><table class="min-w-full bg-gray-800 border-collapse text-sm"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`;
-        } catch (e) {
-            console.error("Table parsing error", e);
-            return match; 
-        }
-    });
-
-    processedText = processedText.replace(/\n/g, '<br>');
-
-    processedText = processedText.replace(/__CODE_BLOCK_(\d+)__/g, (match, index) => {
-        const block = codeBlocks[index];
-        const escapedCode = block.code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        return `
-        <div class="my-4 rounded-lg overflow-hidden bg-[#1e1e1e] border border-gray-700 shadow-xl w-full">
-            <div class="code-box-header flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-gray-700">
-                <span class="text-xs text-gray-400 font-mono font-bold uppercase">${block.lang}</span>
-                <button onclick="copyToClipboard(this)" class="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition cursor-pointer bg-transparent border-none">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                    Copy
-                </button>
-            </div>
-            <div class="p-4 overflow-x-auto bg-[#1e1e1e]">
-                <pre><code class="font-mono text-sm text-green-400 whitespace-pre">${escapedCode}</code></pre>
-            </div>
-        </div>`;
-    });
-    return processedText;
-}
-
-function createMessageElement(messageContent, sender) {
-    const row = document.createElement('div');
-    row.classList.add('flex', 'w-full', 'mb-4');
-    const messageWrapper = document.createElement('div');
-    const currentTheme = localStorage.getItem('theme') || 'dark';
-    const themeConfig = themeColors[currentTheme] || themeColors['dark'];
-    
-    if (sender === 'user') {
-        row.classList.add('justify-end', 'user-message');
-        messageWrapper.classList.add('user-message-wrapper', 'animate-pop-in', 'px-5', 'py-3', 'rounded-3xl', 'max-w-4xl', 'shadow-md', 'flex', 'flex-col', 'gap-2');
-        messageWrapper.classList.add(...themeConfig.userMessage);
-        if (Array.isArray(messageContent)) {
-            messageContent.forEach(part => {
-                if (part.type === 'image_url') {
-                    const img = document.createElement('img');
-                    img.src = part.image_url.url;
-                    img.className = 'rounded-lg max-w-xs';
-                    messageWrapper.appendChild(img);
-                } else if (part.type === 'video_url') {
-                    const video = document.createElement('video');
-                    video.src = part.video_url.url;
-                    video.className = 'rounded-lg max-w-xs';
-                    video.controls = true;
-                    messageWrapper.appendChild(video);
-                } else if (part.type === 'text') {
-                    const textDiv = document.createElement('div');
-                    textDiv.innerHTML = escapeHTML(part.text);
-                    messageWrapper.appendChild(textDiv);
-                }
-            });
-        } else {
-             messageWrapper.innerHTML = escapeHTML(messageContent);
-        }
-    } else {
-        row.classList.add('justify-start');
-        messageWrapper.classList.add('ai-message-wrapper', 'animate-pop-in', 'max-w-4xl');
-        messageWrapper.classList.add(...themeConfig.aiMessage);
-        messageWrapper.innerHTML = formatAIResponse(messageContent);
-    }
-    row.appendChild(messageWrapper);
-    return row;
-}
-
-function renderMath(element) {
-    if (window.renderMathInElement) {
-        renderMathInElement(element, {
-            delimiters: [
-                {left: '$$', right: '$$', display: true},
-                {left: '$', right: '$', display: false},
-                {left: '\\(', right: '\\)', display: false},
-                {left: '\\[', right: '\\]', display: true}
-            ],
-            throwOnError: false
-        });
-    }
-}
-
-async function typeWriterEffect(text, element) {
-    if (!text) return;
-    element.innerHTML = ''; 
-    const words = text.split(/(?=\s)/g); 
-    let currentText = "";
-    const speed = 10; 
-    const chatContainer = getEl('chat-container');
-
-    for (const word of words) {
-        currentText += word;
-        element.innerHTML = formatAIResponse(currentText);
-        if(chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
-        await new Promise(r => setTimeout(r, speed));
-    }
-    element.innerHTML = formatAIResponse(text);
-}
-
-async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
-    const isLocal = window.location.hostname === 'localhost' || 
-                    window.location.hostname === '127.0.0.1' ||
-                    window.location.protocol === 'file:';
-    const CLOUDFLARE_PROJECT_URL = ''; 
-    const API_URL = isLocal && CLOUDFLARE_PROJECT_URL ? `${CLOUDFLARE_PROJECT_URL}/api/handler` : '/api/handler';
 
     try {
-        const response = await fetch(API_URL, {
+        const payload = {
+            query: query,
+            type: "neural",
+            useAutoprompt: true,
+            numResults: 2, 
+            contents: { text: { maxCharacters: 1200 } }
+        };
+
+        const res = await safeFetch(EXA_API_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ modelName, messages, max_tokens: 4000, temperature: 0.7 }),
-            signal
-        });
+            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+            body: JSON.stringify(payload)
+        }, 15000);
 
-        if (!response.ok) {
-            let errorMsg = `Server Error (${response.status})`;
-            try { const errorData = await response.json(); if (errorData.error) errorMsg = errorData.error; } catch (e) {}
-            throw new Error(errorMsg);
+        if (!res.ok) {
+            const txt = await res.text();
+            debugSteps.push({ exa_fail: res.status, msg: txt });
+            return null;
         }
 
-        const data = await response.json();
-        const fullText = (data && data.content) ? data.content : ""; 
-        
-        await typeWriterEffect(fullText, aiMessageEl.firstChild);
-        return fullText;
+        const data = await res.json();
+        if (data && data.results && data.results.length > 0) {
+            return data.results.map(r => ({
+                title: r.title || 'No Title',
+                link: r.url || '',
+                content: (r.highlights && r.highlights[0]) ? r.highlights[0] : (r.text || '')
+            }));
+        }
+        return null;
 
-    } catch (error) {
-        if (error.name === 'AbortError') return aiMessageEl.firstChild.innerText;
-        console.error("Fetch Error:", error);
-        let userMsg = (translations[currentLang] && translations[currentLang].errorPrefix) ? translations[currentLang].errorPrefix : "Đã có lỗi xảy ra.";
-        if (error.message) userMsg += ` (${error.message})`;
-        aiMessageEl.firstChild.innerHTML = `<span class="text-red-400">${userMsg}</span>`;
-        throw error;
+    } catch (e) {
+        debugSteps.push({ exa_exception: String(e) });
+        return null;
     }
 }
 
-if(chatFormEl) {
-    chatFormEl.addEventListener('submit', async function(event) {
-        event.preventDefault();
-        const message = messageInput.value.trim();
-        if (!message && !stagedFile) return;
-        
-        const initialView = getEl('initial-view');
-        const chatContainer = getEl('chat-container');
-        const mainContent = getEl('mainContent');
-
-        if (initialView && !initialView.classList.contains('hidden')) {
-            initialView.style.opacity = '0';
-            setTimeout(() => {
-                initialView.classList.add('hidden');
-                if(chatContainer) chatContainer.classList.remove('hidden');
-                if(mainContent) {
-                    mainContent.classList.remove('justify-center');
-                    mainContent.classList.add('justify-start');
-                }
-            }, 500);
-        }
-
-        const userMessageContent = [];
-        if (stagedFile) {
-            if (stagedFile.type === 'image') userMessageContent.push({ type: "image_url", image_url: { url: stagedFile.url } });
-            else if (stagedFile.type === 'video') userMessageContent.push({ type: "video_url", video_url: { url: stagedFile.url } });
-        }
-        if (message) userMessageContent.push({ type: "text", text: message });
-
-        const userMessageEl = createMessageElement(userMessageContent, 'user');
-        chatContainer.appendChild(userMessageEl);
-
-        const historyContent = userMessageContent.length === 1 && userMessageContent[0].type === 'text' ? message : userMessageContent;
-        conversationHistory.push({ role: 'user', content: historyContent });
-        renderHistoryList();
-
-        messageInput.value = '';
-        messageInput.dispatchEvent(new Event('input')); 
-        stagedFile = null;
-        if(fileThumbnailContainer) fileThumbnailContainer.innerHTML = '';
-        isRandomPromptUsedInSession = true; 
-        updateRandomButtonVisibility(); 
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-
-        const aiMessageEl = createMessageElement('', 'ai');
-        aiMessageEl.firstChild.classList.add('streaming'); 
-        aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse">AI đang trả lời...</span>';
-
-        const searchStatusTimer = setTimeout(() => {
-            if (shouldShowSearchStatus(message)) {
-                aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse text-blue-400">Đang tìm kiếm thông tin...</span>';
-            } else {
-                aiMessageEl.firstChild.innerHTML = '<span class="animate-pulse">AI đang suy nghĩ...</span>';
-            }
-        }, 1500);
-
-        chatContainer.appendChild(aiMessageEl);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-        
-        if(sendButton) sendButton.classList.add('hidden');
-        if(soundWaveButton) soundWaveButton.classList.add('hidden');
-        if(stopButton) stopButton.classList.remove('hidden');
-        setInputActive(false);
-
-        abortController = new AbortController();
-
-        try {
-            const modelToUse = (currentModel && currentModel.model) ? currentModel.model : 'Mini';
-            const fullAiResponse = await streamAIResponse(modelToUse, conversationHistory, aiMessageEl, abortController.signal);
-            
-            clearTimeout(searchStatusTimer); 
-            conversationHistory.push({ role: 'assistant', content: fullAiResponse });
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-            saveStateToLocalStorage(); 
-        } catch (error) {
-            clearTimeout(searchStatusTimer);
-        } finally {
-            clearTimeout(searchStatusTimer);
-            aiMessageEl.firstChild.classList.remove('streaming');
-            renderMath(aiMessageEl);
-
-            if(stopButton) stopButton.classList.add('hidden');
-            if(soundWaveButton) soundWaveButton.classList.remove('hidden');
-            setInputActive(true);
-        }
-    });
+// ----------------------------
+// 3. MAIN WORKER
+// ----------------------------
+export async function onRequestOptions() {
+  return new Response(null, { status: 204, headers: corsHeaders });
 }
 
-// Token & Inputs (Giữ nguyên)
-const currentTokenInput = getEl('current-token-input');
-const maxTokenInput = getEl('max-token-input');
-const tokenInputsContainer = getEl('token-inputs-container');
-const tokenInfinity = getEl('token-infinity');
+export async function onRequestPost(context) {
+  const { request, env } = context;
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { modelName = 'Smart', messages = [] } = body;
+    const debug = { steps: [] };
 
-function initTokenSystem() {
-    if (tokenConfig.IS_INFINITE) {
-        updateTokenUI();
-        return;
-    }
-    let maxTokens = localStorage.getItem('maxTokens');
-    if (maxTokens === null) {
-        maxTokens = tokenConfig.MAX_TOKENS;
-        localStorage.setItem('maxTokens', maxTokens);
-    }
-    let userTokens = localStorage.getItem('userTokens');
-    if (userTokens === null) {
-        userTokens = maxTokens;
-        localStorage.setItem('userTokens', userTokens);
-        localStorage.setItem('lastTokenRegenTimestamp', Date.now());
-    }
-    if(currentTokenInput) currentTokenInput.addEventListener('change', handleTokenInputChange);
-    if(maxTokenInput) maxTokenInput.addEventListener('change', handleTokenInputChange);
-    regenerateTokens();
-    setInterval(regenerateTokens, 60 * 1000);
-}
-
-function handleTokenInputChange() {
-    let newCurrent = parseInt(currentTokenInput.value);
-    let newMax = parseInt(maxTokenInput.value);
-    if (isNaN(newMax) || newMax < 1) newMax = parseInt(localStorage.getItem('maxTokens')) || tokenConfig.MAX_TOKENS;
-    if (isNaN(newCurrent) || newCurrent < 0) newCurrent = 0;
-    if (newCurrent > newMax) newCurrent = newMax;
-    localStorage.setItem('userTokens', newCurrent);
-    localStorage.setItem('maxTokens', newMax);
-    updateTokenUI();
-}
-
-function regenerateTokens() {
-    if (tokenConfig.IS_INFINITE) return;
-    const maxTokens = parseInt(localStorage.getItem('maxTokens'));
-    let currentTokens = parseInt(localStorage.getItem('userTokens') || '0');
-    if (currentTokens >= maxTokens) {
-        updateTokenUI();
-        return;
-    }
-    const lastRegenTimestamp = parseInt(localStorage.getItem('lastTokenRegenTimestamp') || Date.now());
-    const now = Date.now();
-    const timeElapsed = now - lastRegenTimestamp;
-    const regenIntervalMs = tokenConfig.TOKEN_REGEN_INTERVAL_MINUTES * 60 * 1000;
-    if (timeElapsed >= regenIntervalMs) {
-        const intervalsPassed = Math.floor(timeElapsed / regenIntervalMs);
-        const tokensToAdd = intervalsPassed * tokenConfig.TOKEN_REGEN_AMOUNT;
-        currentTokens = Math.min(maxTokens, currentTokens + tokensToAdd);
-        localStorage.setItem('userTokens', currentTokens);
-        localStorage.setItem('lastTokenRegenTimestamp', now);
-    }
-    updateTokenUI();
-}
-
-function updateTokenUI() {
-    if(messageInput) messageInput.disabled = false;
-    if (tokenConfig.IS_INFINITE) {
-        if(tokenInputsContainer) tokenInputsContainer.classList.add('hidden');
-        if(tokenInfinity) tokenInfinity.classList.remove('hidden');
-        const t = translations[currentLang] || translations['vi'];
-        if(messageInput) messageInput.placeholder = t.messagePlaceholder;
-        return;
-    }
-    if(tokenInputsContainer) tokenInputsContainer.classList.remove('hidden');
-    if(tokenInfinity) tokenInfinity.classList.add('hidden');
-    const currentTokens = parseInt(localStorage.getItem('userTokens') || '0');
-    const maxTokens = parseInt(localStorage.getItem('maxTokens') || tokenConfig.MAX_TOKENS);
-    if(currentTokenInput) currentTokenInput.value = currentTokens;
-    if(maxTokenInput) maxTokenInput.value = maxTokens;
-    const t = translations[currentLang] || translations['vi'];
-    if (currentTokens < tokenConfig.TOKEN_COST_PER_MESSAGE) {
-        if(messageInput) {
-            messageInput.disabled = true;
-            messageInput.placeholder = t.outOfTokensPlaceholder;
-        }
-    } else {
-        if(messageInput) messageInput.placeholder = t.messagePlaceholder;
-    }
-}
-
-// Other UI Events
-if(stopButton) stopButton.addEventListener('click', () => {
-    if (abortController) abortController.abort();
-});
-
-function setInputActive(isActive) {
-    const t = translations[currentLang] || translations['vi'];
-    if(messageInput) {
-        messageInput.disabled = !isActive;
-        if (!isActive) messageInput.placeholder = t.aiTypingPlaceholder;
-        else updateTokenUI();
-    }
-    const footerButtons = [randomPromptBtn, videoBtn, learnBtn, uploadFileBtn, modelButton];
-    footerButtons.forEach(btn => { if(btn) btn.disabled = !isActive; });
-}
-
-// Random Prompt
-const randomPrompts = {
-    vi: ["Kể một câu chuyện cười", "Thủ đô của nước Pháp là gì?", "Viết một đoạn văn về tầm quan trọng của việc đọc sách.", "Công thức làm món phở bò?"],
-    en: ["Tell me a joke", "What is the capital of France?", "Write a paragraph about the importance of reading books.", "What is the recipe for beef pho?"],
-};
-
-if(randomPromptBtn) randomPromptBtn.addEventListener('click', () => {
-    if (isRandomPromptUsedInSession) return;
-    const prompts = randomPrompts[currentLang] || randomPrompts['vi'];
-    const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
-    if(messageInput) {
-        messageInput.value = randomPrompt;
-        messageInput.dispatchEvent(new Event('input')); 
-        isRandomPromptUsedInSession = true;
-        updateRandomButtonVisibility();
-        chatFormEl.dispatchEvent(new Event('submit', { cancelable: true }));
-    }
-});
-
-if(videoBtn) videoBtn.addEventListener('click', () => {
-    const t = translations[currentLang] || translations['vi'];
-    alert(t.comingSoon);
-});
-
-function updateLearnButtonVisualState() {
-    if(!learnBtn) return;
-    const learnIcon = learnBtn.querySelector('svg');
-    const currentTheme = localStorage.getItem('theme') || 'dark';
-    const activeColorClass = currentTheme === 'light' ? 'bg-blue-500' : 'bg-blue-600';
-    const themeConfig = themeColors[currentTheme] || themeColors['dark'];
-    
-    if (isTutorMode) {
-        learnBtn.classList.add(activeColorClass);
-        if(learnIcon) {
-            learnIcon.classList.add('text-white');
-            if(themeConfig.iconColor) learnIcon.classList.remove(themeConfig.iconColor);
-        }
-    } else {
-        learnBtn.classList.remove('bg-blue-600', 'bg-blue-500');
-        if(learnIcon) {
-            learnIcon.classList.remove('text-white');
-            if(themeConfig.iconColor) learnIcon.classList.add(themeConfig.iconColor);
-        }
-    }
-}
-
-if(learnBtn) learnBtn.addEventListener('click', () => {
-    isTutorMode = !isTutorMode; 
-    localStorage.setItem('isTutorMode', isTutorMode);
-    updateLearnButtonVisualState();
-});
-
-// File Upload
-if(uploadFileBtn) uploadFileBtn.addEventListener('click', () => fileInput && fileInput.click());
-
-if(fileInput) fileInput.addEventListener('change', (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    if (stagedFile && stagedFile.type === 'video') {
-        URL.revokeObjectURL(stagedFile.url);
-    }
-    stagedFile = null;
-    if(fileThumbnailContainer) fileThumbnailContainer.innerHTML = '';
-    
-    const removeButtonHTML = `<button id="remove-file-btn" class="absolute top-0 right-0 -mt-2 -mr-2 bg-red-500 text-white rounded-full h-6 w-6 flex items-center justify-center font-bold text-xs btn-interaction">&times;</button>`;
-
-    if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            stagedFile = { file: file, url: e.target.result, type: 'image' };
-            fileThumbnailContainer.innerHTML = `
-                <div class="relative inline-block">
-                    <img src="${stagedFile.url}" class="h-20 w-auto rounded-lg" />
-                    ${removeButtonHTML}
-                </div>
-            `;
-            addRemoveButtonListener();
-        };
-        reader.readAsDataURL(file);
-    } else if (file.type.startsWith('video/')) {
-        const objectURL = URL.createObjectURL(file);
-        stagedFile = { file: file, url: objectURL, type: 'video' };
-        fileThumbnailContainer.innerHTML = `
-            <div class="relative inline-block">
-                <video src="${stagedFile.url}" class="h-20 w-auto rounded-lg" autoplay muted loop playsinline></video>
-                ${removeButtonHTML}
-            </div>
-        `;
-        addRemoveButtonListener();
-    }
-});
-
-function addRemoveButtonListener() {
-    const btn = document.getElementById('remove-file-btn');
-    if(btn) btn.addEventListener('click', () => {
-        if (stagedFile && stagedFile.type === 'video') {
-             URL.revokeObjectURL(stagedFile.url);
-        }
-        stagedFile = null;
-        if(fileThumbnailContainer) fileThumbnailContainer.innerHTML = '';
-        if(fileInput) fileInput.value = '';
-    });
-}
-
-function renderHistoryList() {
-    if(!historyList) return;
-    historyList.innerHTML = '';
-    const currentTheme = localStorage.getItem('theme') || 'dark';
-    const themeConfig = themeColors[currentTheme] || themeColors['dark'];
-
-    Object.keys(chatHistories).sort().reverse().forEach(chatId => {
-        const history = chatHistories[chatId];
-        if (chatId === currentChatId && history.length === 0) return;
-
-        let firstMessageText = (translations[currentLang] && translations[currentLang].newChatHistory) ? translations[currentLang].newChatHistory : "Cuộc trò chuyện mới";
-        if (history.length > 0) {
-            const firstContent = history[0].content;
-            if (typeof firstContent === 'string') {
-                firstMessageText = firstContent;
-            } else if (Array.isArray(firstContent)) {
-                const mediaPart = firstContent.find(p => p.type === 'image_url' || p.type === 'video_url');
-                const textPart = firstContent.find(p => p.type === 'text');
-                if (mediaPart && mediaPart.type === 'image_url') firstMessageText = '[Hình ảnh]';
-                if (mediaPart && mediaPart.type === 'video_url') firstMessageText = '[Video]';
-                if (textPart && textPart.text) firstMessageText = (mediaPart ? firstMessageText + " " : "") + textPart.text;
-            }
-        }
-
-        const item = document.createElement('div');
-        item.className = 'history-item flex items-center justify-between p-2 rounded-md cursor-pointer';
-        if(themeConfig.historyHover) item.classList.add(...themeConfig.historyHover);
-        item.dataset.chatId = chatId;
-
-        const text = document.createElement('span');
-        text.className = 'text-sm truncate';
-        text.textContent = firstMessageText.substring(0, 25) + (firstMessageText.length > 25 ? '...' : '');
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'p-1 rounded-md hover:bg-red-500/20 text-gray-500 hover:text-red-500';
-        deleteBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>`;
-        deleteBtn.onclick = (e) => {
-            e.stopPropagation();
-            delete chatHistories[chatId];
-            if (currentChatId === chatId) startNewChat();
-            else {
-               saveStateToLocalStorage();
-               renderHistoryList();
-            }
-        };
-
-        item.appendChild(text);
-        item.appendChild(deleteBtn);
-        item.onclick = () => loadChatHistory(chatId);
-        historyList.appendChild(item); 
-    });
-    if(currentChatId) setActiveHistoryItem(currentChatId);
-}
-
-function loadChatHistory(chatId) {
-    currentChatId = chatId;
-    conversationHistory = chatHistories[chatId] || [];
-    
-    const chatContainer = getEl('chat-container');
-    if(chatContainer) chatContainer.innerHTML = '';
-    const initialView = getEl('initial-view');
-    const mainContent = getEl('mainContent');
-
-    if(conversationHistory.length > 0) {
-         if(initialView) initialView.classList.add('hidden');
-         if(chatContainer) chatContainer.classList.remove('hidden');
-         if(mainContent) {
-             mainContent.classList.remove('justify-center');
-             mainContent.classList.add('justify-start');
-         }
-         conversationHistory.forEach(msg => {
-            const el = createMessageElement(msg.content, msg.role);
-            chatContainer.appendChild(el);
-         });
-         renderMath(chatContainer);
-    } else {
-         if(initialView) initialView.classList.remove('hidden');
-         if(chatContainer) chatContainer.classList.add('hidden');
-         setGreeting();
-    }
-     setActiveHistoryItem(chatId);
-     updateRandomButtonVisibility();
-     saveStateToLocalStorage();
-}
-
-function setActiveHistoryItem(chatId) {
-    const currentTheme = localStorage.getItem('theme') || 'dark';
-    const themeConfig = themeColors[currentTheme] || themeColors['dark'];
-    document.querySelectorAll('.history-item').forEach(item => {
-        item.classList.remove(...Object.values(themeColors).flatMap(t => t.historyActive).flat());
-        if(item.dataset.chatId === chatId && themeConfig.historyActive) item.classList.add(...themeConfig.historyActive);
-    });
-}
-
-// 5. MAIN ENTRY POINT
-document.addEventListener('DOMContentLoaded', () => {
-    // Security Gate
-    function checkSecurityGate() {
-        let verificationLimit = localStorage.getItem('verificationLimit');
-        if (!verificationLimit) {
-            verificationLimit = Math.floor(Math.random() * (7 - 2 + 1)) + 2;
-            localStorage.setItem('verificationLimit', verificationLimit);
-        } else verificationLimit = parseInt(verificationLimit);
-        
-        let usageCount = parseInt(localStorage.getItem('appUsageCount') || '0');
-        usageCount++;
-        if (usageCount >= verificationLimit) {
-            localStorage.setItem('isLocked', 'true'); 
-            window.location.href = 'verify.html';
-        } else localStorage.setItem('appUsageCount', usageCount);
-    }
-    try { checkSecurityGate(); } catch(e) {}
-
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    const savedLang = localStorage.getItem('language') || 'vi';
-    
-    switchLanguage(savedLang);
-    applyTheme(savedTheme);
-    initializeApp();
-    try { handleUpdateLog(); } catch(e) {}
-    initTokenSystem();
-    
-    if(soundWaveButton) soundWaveButton.classList.remove('hidden');
-    if(sendButton) sendButton.classList.add('hidden');
-
-    updateModelButtonText();
-    updateLearnButtonVisualState();
-
-    if(messageInput) messageInput.addEventListener('input', () => {
-        if (messageInput.value.trim().length > 0) {
-            if(soundWaveButton) soundWaveButton.classList.add('hidden');
-            if(sendButton) sendButton.classList.remove('hidden');
-            isRandomPromptUsedInSession = true; 
-            updateRandomButtonVisibility(); 
-        } else {
-            if(soundWaveButton) soundWaveButton.classList.remove('hidden');
-            if(sendButton) sendButton.classList.add('hidden');
-        }
-    });
-
-    const initialView = getEl('initial-view');
-    if (initialView && !initialView.classList.contains('hidden')) {
-         const mt = getEl('main-title');
-         if(mt) mt.classList.add('animate-fade-up');
-    }
-
-    document.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.key.toLowerCase() === 'g') {
-            e.preventDefault();
-            startNewChat();
-        }
-        const activeEl = document.activeElement;
-        const isTypingInInput = activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA';
-        if (!isTypingInInput && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-            if(messageInput) messageInput.focus();
-        }
-    });
-});
-
-function handleUpdateLog() {
-    const updateLogModal = getEl('update-log-modal');
-    const closeUpdateLogBtn = getEl('close-update-log');
-    const dontShowAgainCheckbox = getEl('dont-show-again');
-    const updateLogVersion = '1.0.3'; 
-    const hasSeenUpdate = localStorage.getItem('seenUpdateLogVersion');
-
-    if (hasSeenUpdate !== updateLogVersion && updateLogModal) showModal(updateLogModal, true);
-
-    const closeAndSavePreference = () => {
-        if (dontShowAgainCheckbox && dontShowAgainCheckbox.checked) localStorage.setItem('seenUpdateLogVersion', updateLogVersion);
-        showModal(updateLogModal, false);
+    // --- SỬ DỤNG MODEL STABLE (An toàn) ---
+    // Tôi đã đổi về các Model chắc chắn hoạt động để test
+    const apiConfig = {
+      Mini: { 
+          key: env.MINI_API_KEY, 
+          // Thay qwen3 (chưa ổn định) bằng Qwen 2.5 7B (Nhanh, Free)
+          model: 'qwen/qwen-2.5-7b-instruct:free' 
+      },
+      Smart: { 
+          key: env.SMART_API_KEY, 
+          // Mistral Small 24B Free đôi khi bị limit, dùng Gemini Flash 2.0 Exp Free (Cực mạnh)
+          model: 'google/gemini-2.0-flash-exp:free' 
+      },
+      Nerd: { 
+          key: env.NERD_API_KEY, 
+          // GLM-4-9B Free (Ổn định hơn GLM-4.5 Air)
+          model: 'thudm/glm-4-9b-chat:free' 
+      }
     };
 
-    if(closeUpdateLogBtn) closeUpdateLogBtn.addEventListener('click', closeAndSavePreference);
-}
+    const config = apiConfig[modelName];
+    if (!config) return new Response(JSON.stringify({ error: 'Invalid modelName' }), { status: 400, headers: corsHeaders });
 
-//=====================================================================//
-// 6. INJECT CSS FOR SOURCE PILLS (Auto-run)                           //
-//=====================================================================//
-(function addSourcePillStyles() {
-    const style = document.createElement('style');
-    style.innerHTML = `
-        .source-pill {
-            display: inline-flex;
-            align-items: center;
-            background-color: #2f3336;
-            color: #e0e0e0 !important;
-            text-decoration: none;
-            font-size: 0.7rem;
-            font-weight: 600;
-            padding: 2px 10px;
-            border-radius: 99px;
-            margin: 0 2px 0 6px;
-            vertical-align: middle;
-            border: 1px solid #444;
-            transition: all 0.2s ease;
-            white-space: nowrap;
-            opacity: 0.9;
+    const lastMsg = messages[messages.length - 1].content || '';
+    let toolUsed = 'Internal Knowledge';
+    let searchContext = '';
+
+    // --- B1: PHÂN TÍCH ---
+    const decisionKey = env.DECIDE_API_KEY || env.SMART_API_KEY;
+    const analysis = await analyzeRequest(lastMsg, decisionKey, debug.steps);
+
+    // --- B2: GỌI EXA ---
+    if (analysis.needed) {
+        const results = await searchExa(analysis.query, env.EXA_API_KEY, debug.steps);
+        if (results) {
+            toolUsed = 'WebSearch (Exa.ai)';
+            searchContext = results.map((r, i) => 
+                `[${i+1}] Title: ${r.title}\n   Link: ${r.link}\n   Info: ${r.content.replace(/\n+/g, ' ').slice(0, 1000)}...`
+            ).join('\n\n');
+        } else {
+            toolUsed = 'WebSearch (Exa Failed)';
         }
-        .source-pill:hover {
-            background-color: #1d9bf0;
-            border-color: #1d9bf0;
-            color: white !important;
-            transform: translateY(-1px);
-            opacity: 1;
-            box-shadow: 0 2px 8px rgba(29, 155, 240, 0.3);
+    }
+
+    // --- B3: TRẢ LỜI ---
+    const finalMessages = [...messages];
+
+    if (searchContext) {
+        const lastIdx = finalMessages.length - 1;
+        finalMessages[lastIdx].content = `
+User Query: "${lastMsg}"
+
+[SYSTEM DATA: EXA SEARCH RESULTS]
+${searchContext}
+
+[INSTRUCTION]
+Answer based ONLY on the search results above. Cite sources [1].
+`;
+    }
+
+    // Clean System Prompt
+    const cleanMessages = finalMessages.filter(m => m.role !== 'system');
+    cleanMessages.unshift({ role: 'system', content: 'You are Oceep. Helpful and direct.' });
+
+    // --- GỌI MODEL VỚI ERROR HANDLING CHI TIẾT ---
+    const modelRes = await safeFetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.key}` },
+      body: JSON.stringify({
+          model: config.model,
+          messages: cleanMessages,
+          max_tokens: 2000
+      })
+    }, 45000); // 45s Timeout
+
+    if (!modelRes.ok) {
+        // Đọc kỹ lỗi từ OpenRouter để báo về
+        const errorText = await modelRes.text();
+        // Cố gắng parse JSON lỗi
+        try {
+            const errJson = JSON.parse(errorText);
+            const msg = errJson.error?.message || errorText;
+            throw new Error(`OpenRouter Error (${config.model}): ${msg}`);
+        } catch (e) {
+            throw new Error(`OpenRouter Failed ${modelRes.status}: ${errorText}`);
         }
-        body.text-black .source-pill {
-            background-color: #eef1f5;
-            color: #333 !important;
-            border-color: #cbd5e1;
-        }
-        body.text-black .source-pill:hover {
-            background-color: #2563eb;
-            color: white !important;
-            border-color: #2563eb;
-        }
-    `;
-    document.head.appendChild(style);
-})();
+    }
+
+    const data = await modelRes.json();
+    let answer = data?.choices?.[0]?.message?.content || '';
+
+    answer = cleanResponse(answer);
+
+    return new Response(JSON.stringify({
+      content: answer,
+      toolUsed,
+      debug
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+  } catch (err) {
+    // Trả về lỗi chi tiết trong JSON để hiển thị
+    return new Response(JSON.stringify({ 
+        error: err.message, 
+        stack: err.stack 
+    }), { status: 500, headers: corsHeaders });
+  }
+}
