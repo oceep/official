@@ -38,17 +38,15 @@ function cleanResponse(text) {
 // 1. INTELLIGENT ROUTER (Quyết định Search)
 // ----------------------------
 async function analyzeRequest(userPrompt, apiKey, debugSteps) {
-  // --- HARD RULES (Luật cứng) ---
-  // Nếu câu hỏi quá ngắn hoặc chứa từ khóa địa điểm -> Search luôn, khỏi hỏi AI tốn thời gian
+  // HARD RULES: Ép search nếu có từ khóa địa điểm/thời gian thực
   const lower = userPrompt.toLowerCase();
-  const triggerWords = ['địa chỉ', 'ở đâu', 'chỗ nào', 'là gì', 'address', 'location', 'review', 'giá', 'mới nhất', 'hôm nay', 'tại hà nội', 'tại hcm'];
+  const triggerWords = ['địa chỉ', 'ở đâu', 'chỗ nào', 'là gì', 'address', 'location', 'review', 'giá', 'mới nhất', 'hôm nay', 'tại hà nội', 'tại hcm', 'thời tiết'];
   
   if (triggerWords.some(w => lower.includes(w)) || userPrompt.split(' ').length < 10) {
       debugSteps.push({ router: 'hard_rule_trigger', msg: 'Forcing search due to keywords' });
       return { needed: true, query: userPrompt };
   }
 
-  // Nếu không trúng luật cứng, mới dùng AI để phân tích
   if (!apiKey) return { needed: true, query: userPrompt };
 
   try {
@@ -75,7 +73,7 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
     
     let parsed;
     try { parsed = JSON.parse(content); } catch (e) { 
-        parsed = { needed: true, query: userPrompt }; // Mặc định là True cho an toàn
+        parsed = { needed: true, query: userPrompt };
     }
     debugSteps.push({ router: 'ai_decision', output: parsed });
     return parsed;
@@ -97,11 +95,11 @@ async function searchExa(query, apiKey, debugSteps) {
     try {
         const payload = {
             query: query,
-            type: "neural", // Dùng Neural để hiểu ngữ nghĩa tốt hơn Keyword
-            useAutoprompt: true, // Để Exa tự tối ưu câu hỏi
+            type: "neural", 
+            useAutoprompt: true,
             numResults: 3, 
             contents: {
-                text: { maxCharacters: 1500 } // Lấy nội dung dài hơn
+                text: { maxCharacters: 1500 }
             }
         };
 
@@ -126,7 +124,6 @@ async function searchExa(query, apiKey, debugSteps) {
             return data.results.map(r => ({
                 title: r.title || 'No Title',
                 link: r.url || '',
-                // Ưu tiên highlight (đoạn khớp nhất), nếu không thì lấy text
                 content: (r.highlights && r.highlights[0]) ? r.highlights[0] : (r.text || '')
             }));
         }
@@ -154,12 +151,22 @@ export async function onRequestPost(context) {
     const { modelName = 'Smart', messages = [] } = body;
     const debug = { steps: [] };
 
-    // Config
+    // --- CẬP NHẬT MODEL THEO YÊU CẦU ---
     const apiConfig = {
-      Mini: { key: env.MINI_API_KEY, model: 'openai/gpt-oss-20b:free' },
-      Smart: { key: env.SMART_API_KEY, model: 'z-ai/glm-4.5-air:free' },
-      Nerd: { key: env.NERD_API_KEY, model: 'amazon/nova-2-lite-v1:free' }
+      Mini: { 
+          key: env.MINI_API_KEY, 
+          model: 'qwen/qwen3-4b:free' // Lưu ý: Nếu OpenRouter chưa có Qwen3, hãy đổi thành 'qwen/qwen-2.5-7b-instruct:free'
+      },
+      Smart: { 
+          key: env.SMART_API_KEY, 
+          model: 'mistralai/mistral-small-3.1-24b-instruct:free' 
+      },
+      Nerd: { 
+          key: env.NERD_API_KEY, 
+          model: 'amazon/nova-2-lite-v1:free' 
+      }
     };
+
     const config = apiConfig[modelName];
     if (!config) return new Response(JSON.stringify({ error: 'Invalid modelName' }), { status: 400, headers: corsHeaders });
 
@@ -167,7 +174,7 @@ export async function onRequestPost(context) {
     let toolUsed = 'Internal Knowledge';
     let searchContext = '';
 
-    // --- B1: PHÂN TÍCH (Router) ---
+    // --- B1: PHÂN TÍCH ---
     const decisionKey = env.DECIDE_API_KEY || env.SMART_API_KEY;
     const analysis = await analyzeRequest(lastMsg, decisionKey, debug.steps);
 
@@ -181,7 +188,6 @@ export async function onRequestPost(context) {
                 `[${i+1}] Title: ${r.title}\n   Link: ${r.link}\n   Info: ${r.content.replace(/\n+/g, ' ').slice(0, 1000)}...`
             ).join('\n\n');
         } else {
-            // Nếu Exa fail hoặc trả về rỗng -> Ghi nhận để biết
             toolUsed = 'WebSearch (Exa Failed)';
         }
     }
@@ -191,26 +197,23 @@ export async function onRequestPost(context) {
 
     if (searchContext) {
         const lastIdx = finalMessages.length - 1;
-        // Inject thẳng vào User Message (Mạnh nhất)
+        // Inject Search Data
         finalMessages[lastIdx].content = `
 User Query: "${lastMsg}"
 
 [SYSTEM DATA: EXA SEARCH RESULTS]
-The following information was retrieved from Exa.ai:
 ${searchContext}
 
 [INSTRUCTION]
 Answer the user query based ONLY on the search results above.
-- If the address/info is in the results, state it clearly.
-- If not, say "I cannot find the information in the search results."
-- Do NOT hallucinate (do not make up info).
 - Cite sources as [1], [2].
+- If info is missing, say so.
+- Do NOT hallucinate.
 `;
     } else if (analysis.needed && toolUsed.includes('Failed')) {
-        // Trường hợp cần search mà Exa lỗi -> Báo user biết
         finalMessages.push({
             role: 'system',
-            content: 'Note: You tried to search but the search engine failed or returned no results. Answer based on internal knowledge but mention that live data is unavailable.'
+            content: 'Note: Search failed. Answer based on internal knowledge but mention that live data is unavailable.'
         });
     }
 
@@ -236,12 +239,11 @@ Answer the user query based ONLY on the search results above.
     const data = await modelRes.json();
     let answer = data?.choices?.[0]?.message?.content || '';
 
-    // Cleanup
+    // Cleanup Output
     answer = cleanResponse(answer);
 
-    // Safeguard JSON
     if (answer.startsWith('{')) {
-        answer = "Lỗi hiển thị dữ liệu (JSON). Vui lòng thử lại.";
+        answer = "Lỗi hiển thị dữ liệu (JSON Error). Vui lòng thử lại.";
     }
 
     return new Response(JSON.stringify({
