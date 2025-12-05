@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Title',
 };
 
-// --- CONFIGURATION ---
+// --- CẤU HÌNH ---
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const EXA_API_URL = 'https://api.exa.ai/search';
 const DECISION_MODEL = 'arcee-ai/trinity-mini:free'; 
@@ -14,7 +14,7 @@ const DECISION_MODEL = 'arcee-ai/trinity-mini:free';
 // ----------------------------
 // Helpers
 // ----------------------------
-async function safeFetch(url, opts = {}, ms = 20000) {
+async function safeFetch(url, opts = {}, ms = 25000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), ms);
   try {
@@ -34,8 +34,20 @@ function cleanResponse(text) {
     return cleaned.trim();
 }
 
+// Helper lấy tên miền đẹp (vd: vnexpress.net -> Vnexpress)
+function getDomainName(url) {
+    try {
+        const hostname = new URL(url).hostname;
+        let name = hostname.replace('www.', '');
+        name = name.split('.')[0]; 
+        return name.charAt(0).toUpperCase() + name.slice(1);
+    } catch (e) {
+        return "Source";
+    }
+}
+
 // ----------------------------
-// 1. SMART ROUTER (Bộ lọc từ khóa Việt)
+// 1. SMART ROUTER (Bộ lọc thông minh)
 // ----------------------------
 async function analyzeRequest(userPrompt, apiKey, debugSteps) {
   const lower = userPrompt.toLowerCase();
@@ -44,9 +56,10 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
   const skipTriggers = [
       'viết', 'write', 'dịch', 'translate', 'code', 'lập trình', 'tính', 'calculate', 
       'giải', 'solve', 'tạo', 'create', 'sáng tác', 'compose', 'check', 'kiểm tra lỗi',
-      'viet', 'dich', 'lap trinh', 'tinh', 'giai', 'tao', 'sang tac', 'kiem tra', 'sua loi'
+      'viet', 'dich', 'lap trinh', 'tinh', 'giai', 'tao', 'sang tac', 'kiem tra', 'sua loi',
+      'html', 'css', 'javascript', 'python', 'fix bug'
   ];
-  if (skipTriggers.some(w => lower.startsWith(w))) {
+  if (skipTriggers.some(w => lower.startsWith(w) || lower.includes(` ${w} `))) {
       debugSteps.push({ router: 'skip_rule', msg: 'Skipping search' });
       return { needed: false, query: '' };
   }
@@ -65,7 +78,7 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
       return { needed: true, query: userPrompt };
   }
 
-  // AI DECISION (Dùng AI đoán)
+  // AI DECISION
   if (!apiKey) return { needed: false, query: '' };
 
   try {
@@ -84,7 +97,7 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(payload)
-    }, 5000);
+    }, 4000);
     
     if (!res.ok) throw new Error('Router API failed');
     const data = await res.json();
@@ -133,6 +146,7 @@ async function searchExa(query, apiKey, debugSteps) {
             return data.results.map(r => ({
                 title: r.title || 'No Title',
                 link: r.url || '',
+                sourceName: getDomainName(r.url || ''), 
                 content: (r.highlights && r.highlights[0]) ? r.highlights[0] : (r.text || '')
             }));
         }
@@ -158,20 +172,19 @@ export async function onRequestPost(context) {
     const { modelName = 'Smart', messages = [] } = body;
     const debug = { steps: [] };
 
-    // --- MODEL CONFIG (Safe Models) ---
+    // --- CẤU HÌNH MODEL (THEO YÊU CẦU CỦA BẠN) ---
     const apiConfig = {
       Mini: { 
           key: env.MINI_API_KEY, 
-          model: 'qwen/qwen-2.5-7b-instruct:free' 
+          model: 'qwen/qwen3-4b:free' 
       },
       Smart: { 
           key: env.SMART_API_KEY, 
-          // Mistral hoặc Gemini Flash Free đều mạnh về tiếng Việt
-          model: 'google/gemini-2.0-flash-exp:free' 
+          model: 'mistralai/mistral-small-3.1-24b-instruct:free' 
       },
       Nerd: { 
           key: env.NERD_API_KEY, 
-          model: 'thudm/glm-4-9b-chat:free' 
+          model: 'z-ai/glm-4.5-air:free' 
       }
     };
 
@@ -192,39 +205,40 @@ export async function onRequestPost(context) {
         if (results) {
             toolUsed = 'WebSearch (Exa.ai)';
             searchContext = results.map((r, i) => 
-                `[${i+1}] Title: ${r.title}\n   Link: ${r.link}\n   Info: ${r.content.replace(/\n+/g, ' ').slice(0, 1000)}...`
+                `[${i+1}] SOURCE_NAME: "${r.sourceName}"\n   LINK: ${r.link}\n   CONTENT: ${r.content.replace(/\n+/g, ' ').slice(0, 1000)}...`
             ).join('\n\n');
         } else {
             toolUsed = 'WebSearch (Exa Failed)';
         }
     }
 
-    // --- B3: TRẢ LỜI (With Language Enforcement) ---
+    // --- B3: TRẢ LỜI ---
     const finalMessages = [...messages];
 
     if (searchContext) {
         const lastIdx = finalMessages.length - 1;
-        // Inject Search Data + LANGUAGE INSTRUCTION
+        
+        // INJECT DATA + INSTRUCTION CHO PILL FORMAT
         finalMessages[lastIdx].content = `
 User Query: "${lastMsg}"
 
-[SYSTEM DATA: EXA SEARCH RESULTS]
+[SYSTEM DATA: REAL-TIME SEARCH RESULTS]
 ${searchContext}
 
 [CRITICAL INSTRUCTION]
 1. Answer the user's query based ONLY on the search results above.
-2. LANGUAGE RULE: You MUST answer in the SAME LANGUAGE as the User's Query. 
-   - If User asks in Vietnamese -> Answer in VIETNAMESE (Translate search results if needed).
-   - If User asks in English -> Answer in English.
-3. Cite sources as [1].
+2. CITATION FORMAT: You MUST use Markdown Links for citations.
+   Format: **[Source Name](URL)**
+   Example: "Giá vé là 2 triệu **[VietnamAirlines](https://.../ve-may-bay)**"
+   Place the citation immediately after the relevant fact.
+3. LANGUAGE: Answer in the SAME LANGUAGE as the User's Query (Vietnamese/English).
 `;
     }
 
-    // System Prompt
     const cleanMessages = finalMessages.filter(m => m.role !== 'system');
     cleanMessages.unshift({ 
         role: 'system', 
-        content: 'You are Oceep. You act as a knowledgeable assistant. ALWAYS answer in the language of the user.' 
+        content: 'You are Oceep. Always cite sources using Markdown links: **[Source](Link)**.' 
     });
 
     const modelRes = await safeFetch(OPENROUTER_URL, {
@@ -239,12 +253,7 @@ ${searchContext}
 
     if (!modelRes.ok) {
         const errorText = await modelRes.text();
-        try {
-            const errJson = JSON.parse(errorText);
-            throw new Error(`OpenRouter Error: ${errJson.error?.message || errorText}`);
-        } catch (e) {
-            throw new Error(`OpenRouter Failed ${modelRes.status}: ${errorText}`);
-        }
+        throw new Error(`OpenRouter Failed: ${errorText}`);
     }
 
     const data = await modelRes.json();
@@ -259,9 +268,6 @@ ${searchContext}
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err) {
-    return new Response(JSON.stringify({ 
-        error: err.message, 
-        stack: err.stack 
-    }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: err.message, stack: err.stack }), { status: 500, headers: corsHeaders });
   }
 }
