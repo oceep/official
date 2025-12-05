@@ -7,9 +7,9 @@ const corsHeaders = {
 };
 
 // --- CONFIGURATION ---
-const SEARCH_TIMEOUT_MS = 10000;
+const SEARCH_TIMEOUT_MS = 15000;
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const DECISION_MODEL = 'arcee-ai/trinity-mini:free'; 
+const DECISION_MODEL = 'arcee-ai/trinity-mini:free'; // Model nhỏ để sửa từ khóa search
 
 // ----------------------------
 // Helpers
@@ -33,26 +33,28 @@ async function safeFetch(url, opts = {}, ms = 10000) {
 }
 
 // ----------------------------
-// 1) QUERY GENERATOR
+// 1) QUERY REFINER ("The SEO Expert")
 // ----------------------------
-async function generateSearchQuery(userPrompt, apiKey, debugSteps) {
+async function refineSearchQuery(userPrompt, apiKey, debugSteps) {
+  // Nếu không có key thì dùng nguyên văn câu hỏi của user
   if (!apiKey) return { needed: true, query: userPrompt };
 
   try {
-    const systemPrompt = `You are a Search Optimizer.
-    Analyze the user's request.
-    1. DECIDE: Does this need external info? (True/False)
-    2. QUERY: If True, write the BEST search query.
-    RETURN JSON ONLY: { "needed": boolean, "query": "string" }`;
+    const systemPrompt = `You are a Search Engine Expert. 
+    Task: Convert the User's Message into the BEST keyword phrase for DuckDuckGo Search.
+    
+    Rules:
+    1. If the user asks for real-time info (news, price, code docs, events), output the optimized search keywords.
+    2. If the user just says "Hi" or "Write code", output "SKIP".
+    3. Output ONLY the keywords or "SKIP". Do not explain.`;
 
     const payload = {
       model: DECISION_MODEL,
-      response_format: { type: "json_object" },
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      max_tokens: 60,
+      max_tokens: 30, // Chỉ cần ngắn gọn
       temperature: 0.1
     };
     
@@ -62,51 +64,69 @@ async function generateSearchQuery(userPrompt, apiKey, debugSteps) {
       body: JSON.stringify(payload)
     }, 4000);
     
-    if (!res.ok) throw new Error('Query Gen Failed');
+    if (!res.ok) throw new Error('Refiner Failed');
     
     const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content || '{}';
-    let parsed;
-    try { parsed = JSON.parse(content); } catch (e) { 
-        const needed = content.toLowerCase().includes('true');
-        parsed = { needed, query: userPrompt };
+    const output = data?.choices?.[0]?.message?.content?.trim() || 'SKIP';
+
+    if (output === 'SKIP' || output.length < 2) {
+        debugSteps.push({ step: 'refiner', result: 'skip_search' });
+        return { needed: false, query: '' };
     }
-    debugSteps.push({ step: 'query_gen', output: parsed });
-    return parsed;
+
+    debugSteps.push({ step: 'refiner', original: userPrompt, optimized: output });
+    return { needed: true, query: output };
+
   } catch (e) {
+    // Lỗi thì cứ search đại bằng prompt gốc cho chắc
     return { needed: true, query: userPrompt };
   }
 }
 
 // ----------------------------
-// 2) SEARCH LAYER (Brave Search)
+// 2) SEARCH LAYER (DuckDuckGo Lite Scraper)
 // ----------------------------
-async function searchBrave(query, debugSteps) {
-  try {
-    const url = `https://search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
-    const res = await safeFetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json'
-      }
-    }, SEARCH_TIMEOUT_MS);
+async function searchDDGLite(query, debugSteps) {
+    try {
+        const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+        
+        const res = await safeFetch(url, {
+            headers: { 
+                // Giả lập trình duyệt để tránh bị chặn
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7' // Ưu tiên tiếng Việt
+            }
+        }, 10000);
 
-    if (!res.ok) {
-      debugSteps.push({ brave_error: res.status });
-      return null;
+        if (!res.ok) {
+            debugSteps.push({ ddg_status: res.status });
+            return null;
+        }
+
+        const html = await res.text();
+
+        // Regex để "cào" dữ liệu từ HTML của DuckDuckGo Lite
+        const results = [];
+        // Pattern: Tìm thẻ <a> có class 'result-link' và thẻ <td> có class 'result-snippet'
+        const regex = /<a[^>]*class="result-link"[^>]*href="(.*?)"[^>]*>(.*?)<\/a>[\s\S]*?<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/g;
+        
+        let match;
+        // Lấy 5 kết quả đầu tiên
+        while ((match = regex.exec(html)) !== null && results.length < 5) {
+            results.push({
+                link: match[1],
+                title: match[2].replace(/<[^>]+>/g, '').trim(), // Xóa thẻ HTML thừa
+                snippet: match[3].replace(/<[^>]+>/g, '').trim()
+            });
+        }
+        
+        return results.length ? results : null;
+
+    } catch (e) {
+        debugSteps.push({ ddg_error: String(e) });
+        return null;
     }
-    const data = await res.json();
-    if (!data || !data.web || !data.web.results) return null;
-
-    return data.web.results.map(r => ({
-      title: r.title || 'No Title',
-      link: r.url || r.source || '',
-      snippet: r.description || ''
-    }));
-  } catch (e) {
-    debugSteps.push({ brave_exception: String(e) });
-    return null;
-  }
 }
 
 // ----------------------------
@@ -123,7 +143,7 @@ export async function onRequestPost(context) {
     const { modelName = 'Smart', messages = [] } = body;
     const debug = { steps: [] };
 
-    // Config
+    // Validate Config
     const apiConfig = {
       Mini: { key: env.MINI_API_KEY, model: 'openai/gpt-oss-20b:free' },
       Smart: { key: env.SMART_API_KEY, model: 'z-ai/glm-4.5-air:free' },
@@ -131,60 +151,68 @@ export async function onRequestPost(context) {
     };
     const config = apiConfig[modelName];
     if (!config) return new Response(JSON.stringify({ error: 'Invalid modelName' }), { status: 400, headers: corsHeaders });
+    
+    if (!messages.length) return new Response(JSON.stringify({ error: 'No messages' }), { status: 400, headers: corsHeaders });
 
     const lastMsg = messages[messages.length - 1].content || '';
     let toolUsed = 'Internal Knowledge';
     let searchContext = '';
 
-    // --- STEP 1 & 2: Search ---
-    const queryKey = env.DECIDE_API_KEY || env.SMART_API_KEY;
-    const decision = await generateSearchQuery(lastMsg, queryKey, debug.steps);
+    // --- STEP 1: REFINE QUERY ---
+    // Dùng key DECIDE hoặc SMART để chạy bước này
+    const refinerKey = env.DECIDE_API_KEY || env.SMART_API_KEY;
+    const decision = await refineSearchQuery(lastMsg, refinerKey, debug.steps);
 
+    // --- STEP 2: SEARCH (DuckDuckGo) ---
     if (decision.needed) {
-        const results = await searchBrave(decision.query, debug.steps);
+        const results = await searchDDGLite(decision.query, debug.steps);
+        
         if (results && results.length > 0) {
-            toolUsed = 'WebSearch (Brave)';
+            toolUsed = 'WebSearch (DuckDuckGo)';
             searchContext = results.map((r, i) => 
-                `[${i+1}] Title: ${r.title}\n   Source: ${r.link}\n   Summary: ${r.snippet}`
+                `[${i+1}] Title: ${r.title}\n   Source: ${r.link}\n   Content: ${r.snippet}`
             ).join('\n\n');
         } else {
             toolUsed = 'WebSearch (No Results)';
+            debug.steps.push({ msg: 'Search ran but found nothing' });
         }
     }
 
-    // --- STEP 3: ANSWER (Chiến thuật mới) ---
+    // --- STEP 3: ANSWER ---
     const finalMessages = [...messages];
 
-    // Thay vì dùng System Prompt, ta "nhét" kết quả vào thẳng tin nhắn cuối cùng của User.
-    // Điều này ép Model phải đọc nó như một phần của câu hỏi.
     if (searchContext) {
-        const lastUserIndex = finalMessages.length - 1;
-        
-        // Tạo một nội dung User mới: "Câu hỏi cũ" + "Dữ liệu tìm được"
-        finalMessages[lastUserIndex].content = `
-User Question: "${lastMsg}"
+        // Chiến thuật: Nhét kết quả vào tin nhắn của User.
+        // Điều này khiến Model buộc phải đọc nó.
+        const lastIdx = finalMessages.length - 1;
+        finalMessages[lastIdx].content = `
+User's Question: "${lastMsg}"
 
-Below is real-time information I found on the web. Use it to answer the question above.
-[START WEB DATA]
+---
+SYSTEM NOTIFICATION:
+I found these search results on DuckDuckGo for query: "${decision.query}"
+
 ${searchContext}
-[END WEB DATA]
 
-IMPORTANT: Answer naturally in the user's language. Do NOT output JSON code. Do NOT output "query": "...". Just speak.
+INSTRUCTION: 
+Using the search results above, answer the User's Question. 
+- Answer naturally in the user's language.
+- Do NOT output raw JSON or code blocks.
+- If the results are irrelevant, ignore them.
+---
 `;
     }
 
-    // System Prompt chỉ dùng để định hình tính cách
+    // System Prompt nhẹ nhàng
     const systemPrompt = {
         role: 'system',
         content: `You are Oceep. You are a helpful assistant.
-        Refuse to act as a search engine. Do NOT output JSON. Do NOT output code blocks.
-        Simply answer the user's question using the provided text.`
+        Your goal is to provide accurate answers based on the provided context.`
     };
-    
-    // Đảm bảo System Prompt nằm đầu
     const cleanMessages = finalMessages.filter(m => m.role !== 'system');
     cleanMessages.unshift(systemPrompt);
 
+    // Call Model
     const modelRes = await safeFetch(OPENROUTER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.key}` },
@@ -199,11 +227,9 @@ IMPORTANT: Answer naturally in the user's language. Do NOT output JSON code. Do 
     const data = await modelRes.json();
     let answer = data?.choices?.[0]?.message?.content || '';
 
-    // --- FINAL SAFEGUARD (Bộ lọc cuối cùng) ---
-    // Nếu nó vẫn ngoan cố trả về JSON, ta sẽ "ép" nó thành text
+    // Safeguard: Nếu lỡ nó vẫn in JSON (hiếm), trả về text báo lỗi
     if (answer.trim().startsWith('{') && answer.includes('"query"')) {
-        answer = "Xin lỗi, tôi đã tìm thấy thông tin nhưng gặp lỗi hiển thị. (Error: JSON Output Detected). Hãy hỏi lại cụ thể hơn.";
-        // Hoặc bạn có thể tự parse JSON đó nếu muốn, nhưng tốt nhất là báo lỗi.
+       answer = "Tôi đã tìm thấy thông tin nhưng gặp lỗi hiển thị dữ liệu. Vui lòng hỏi lại.";
     }
 
     return new Response(JSON.stringify({
