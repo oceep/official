@@ -1,12 +1,12 @@
-// script.js - PHIÊN BẢN ĐẦY ĐỦ (FULL INTEGRITY)
+// script.js - PHIÊN BẢN ĐẦY ĐỦ & ĐÃ SỬA LỖI (PATCHED)
 // Bao gồm: Security, Token, Themes, Multi-lang, Model Selector, Chat History, File Upload, MathJax, Source Pills.
-// ĐÃ THÊM: SYSTEM TRAINING (Tutor/Assistant logic & Language enforcement).
+// ĐÃ FIX: randomPrompts, updateTokenUI, API Logic, Math Safety.
 
 //=====================================================================//
-// 1. CẤU HÌNH & KHỞI TẠO CƠ BẢN                                       //
+// 1. CẤU HÌNH & KHỞI TẠO CƠ BẢN                                     //
 //=====================================================================//
 
-// Kiểm tra khóa bảo mật ngay khi tải trang
+// Kiểm tra khóa bảo mật
 try {
     if (localStorage.getItem('isLocked') === 'true') {
         window.location.href = 'verify.html';
@@ -16,7 +16,7 @@ try {
     console.error("Security check error:", e);
 }
 
-// Helper: Copy Code vào Clipboard
+// Helper: Copy Code
 window.copyToClipboard = function(btn) {
     try {
         const header = btn.closest('.code-box-header');
@@ -35,42 +35,37 @@ window.copyToClipboard = function(btn) {
     } catch (e) { console.error("Copy failed:", e); }
 };
 
-// Cấu hình Hệ thống Token
+// Cấu hình Token
 const tokenConfig = {
-    IS_INFINITE: true,           
+    IS_INFINITE: true,            
     MAX_TOKENS: 50,              
-    TOKEN_COST_PER_MESSAGE: 1,   
+    TOKEN_COST_PER_MESSAGE: 1,    
     TOKEN_REGEN_INTERVAL_MINUTES: 5, 
-    TOKEN_REGEN_AMOUNT: 1,       
+    TOKEN_REGEN_AMOUNT: 1,        
 };
 
-// --- HỆ THỐNG PROMPT (TRAINING) ---
-// Đây là phần bạn yêu cầu thêm vào: Chỉ dẫn AI cách cư xử và ngôn ngữ.
+// Hệ thống Prompt (Training)
 const SYSTEM_PROMPTS = {
-    // Chế độ Assistant (Mặc định)
     assistant: `You are Oceep, a smart and helpful AI Assistant.
-    
     CRITICAL INSTRUCTIONS:
-    1. LANGUAGE: Detect the language used by the user. You MUST answer in the EXACT SAME language. (e.g. If User speaks Vietnamese -> Answer in Vietnamese).
-    2. STYLE: Be CONCISE (ngắn gọn), SUCCINCT (súc tích), and COMPLETE (đầy đủ). Avoid unnecessary fluff.
+    1. LANGUAGE: Detect the language used by the user. You MUST answer in the EXACT SAME language.
+    2. STYLE: Be CONCISE, SUCCINCT, and COMPLETE. Avoid unnecessary fluff.
     3. CITATION: If you use search results, cite them as **[Source Name](URL)**.`,
 
-    // Chế độ Tutor (Học tập - Nút cái mũ cử nhân)
     tutor: `You are Oceep, acting as an expert Tutor/Teacher.
-    
     CRITICAL INSTRUCTIONS:
     1. LANGUAGE: Answer in the EXACT SAME language as the user.
-    2. GOAL: Do not just give the final answer. Explain the "Why" and "How". Guide the user to understand the concept.
-    3. STYLE: Be educational, encouraging, but concise. Break down complex topics into simple steps.`
+    2. GOAL: Do not just give the final answer. Explain the "Why" and "How".
+    3. STYLE: Be educational, encouraging, but concise. Break down complex topics.`
 };
 
 //=====================================================================//
-// 2. DOM ELEMENTS & STATE MANAGEMENT                                  //
+// 2. DOM ELEMENTS & STATE MANAGEMENT & DATA                         //
 //=====================================================================//
 
 const getEl = (id) => document.getElementById(id);
 
-// Các thành phần chứa Text cần dịch
+// DOM Elements
 const textElements = {
     header: getEl('header-title'),
     main: getEl('main-title'),
@@ -90,7 +85,6 @@ const textElements = {
     comingSoonTitle: getEl('coming-soon-title'),
     comingSoonText: getEl('coming-soon-text'),
     closeComingSoonModal: getEl('close-coming-soon-modal'),
-    // Tooltips
     randomTooltip: getEl('random-tooltip'),
     videoTooltip: getEl('video-tooltip'),
     learnTooltip: getEl('learn-tooltip'),
@@ -100,7 +94,6 @@ const textElements = {
     newChatTooltip: getEl('new-chat-tooltip'),
 };
 
-// Các nút & Modal giao diện
 const themeMenuButton = getEl('theme-menu-button');
 const themeModal = getEl('theme-modal');
 const themeOptionButtons = document.querySelectorAll('.theme-option');
@@ -113,7 +106,6 @@ const backgroundContainer = getEl('background-container');
 const chatFormEl = getEl('chat-form');
 const oceanImageUrl = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1173&auto=format&fit=crop';
 
-// Chat Interface Elements
 const sidebar = getEl('sidebar');
 const sidebarToggle = getEl('sidebar-toggle');
 const historyList = getEl('history-list');
@@ -123,14 +115,12 @@ const soundWaveButton = getEl('sound-wave-button');
 const stopButton = getEl('stop-button');
 const messageInput = getEl('message-input');
 
-// Footer Buttons
 const randomPromptBtn = getEl('random-prompt-icon-btn');
 const videoBtn = getEl('video-icon-btn');
 const learnBtn = getEl('learn-icon-btn');
 const modelButton = getEl('model-button');
 const modelPopup = getEl('model-popup');
 
-// File Upload Elements
 const uploadFileBtn = getEl('upload-file-btn');
 const fileInput = getEl('file-input');
 const fileThumbnailContainer = getEl('file-thumbnail-container');
@@ -141,7 +131,7 @@ const maxTokenInput = getEl('max-token-input');
 const tokenInputsContainer = getEl('token-inputs-container');
 const tokenInfinity = getEl('token-infinity');
 
-// --- GLOBAL STATE VARIABLES ---
+// Global State
 let stagedFile = null;
 let currentLang = localStorage.getItem('language') || 'vi';
 let isTutorMode = localStorage.getItem('isTutorMode') === 'true';
@@ -151,14 +141,13 @@ let conversationHistory = [];
 let chatHistories = {};
 let currentChatId = null;
 
-// Khởi tạo Model
 let currentModel;
 try {
     currentModel = JSON.parse(localStorage.getItem('currentModel'));
 } catch (e) { currentModel = null; }
 if (!currentModel) currentModel = { model: 'Mini', version: '' };
 
-// --- TỪ ĐIỂN ĐA NGÔN NGỮ ---
+// Từ điển
 const translations = {
     vi: {
         sidebarHeader: "Lịch sử Chat", newChatTitle: "Chat mới", messagePlaceholder: "Bạn muốn biết gì?", aiTypingPlaceholder: "AI đang trả lời...", outOfTokensPlaceholder: "Hết lượt.", sendButton: "Gửi", stopButton: "Dừng", modelButtonDefault: "Expert", randomButton: "Ngẫu nhiên", videoButton: "Tạo Video", learnButton: "Học Tập", footerText: "AI có thể mắc lỗi. Hãy kiểm tra thông tin quan trọng.", themeModalTitle: "Chọn Giao Diện", languageModalTitle: "Chọn Ngôn Ngữ", themeDark: "Tối", themeLight: "Sáng", themeOcean: "Biển", modalClose: "Đóng", newChatHistory: "Cuộc trò chuyện mới", greetingMorning: "Chào buổi sáng", greetingNoon: "Chào buổi trưa", greetingAfternoon: "Chào buổi chiều", greetingEvening: "Chào buổi tối", errorPrefix: "Đã có lỗi xảy ra", comingSoon: "Sắp có", comingSoonTitle: "Sắp có...", comingSoonText: "Tính năng này đang được phát triển.", langTooltip: "Đổi Ngôn Ngữ", themeTooltip: "Đổi Giao Diện", historyTooltip: "Lịch Sử Chat", newChatTooltip: "Chat Mới", modelMiniDesc: "Nhanh.", modelSmartDesc: "Thông minh.", modelNerdDesc: "Chuyên sâu."
@@ -169,7 +158,25 @@ const translations = {
 };
 ['zh', 'hi', 'es', 'fr', 'ja', 'it'].forEach(l => { if(!translations[l]) translations[l] = translations['en']; });
 
-// --- THEME COLORS ---
+// --- [FIX 1] RANDOM PROMPTS DATA ---
+const randomPrompts = {
+    vi: [
+        "Giải thích lượng tử cho học sinh lớp 5",
+        "Viết code Python tạo trò chơi Snake",
+        "Làm thế nào để ngủ ngon hơn?",
+        "Tóm tắt lịch sử Việt Nam thế kỷ 20",
+        "Công thức nấu món Phở bò ngon"
+    ],
+    en: [
+        "Explain quantum physics to a 5th grader",
+        "Write Python code for Snake game",
+        "How to get better sleep?",
+        "Summarize Vietnam history in 20th century",
+        "Recipe for delicious Beef Pho"
+    ]
+};
+
+// Theme Colors
 const themeColors = {
     dark: { bg: ['bg-gradient-to-br', 'from-[#212935]', 'to-black'], text: 'text-gray-100', subtleText: 'text-gray-400', logo: 'text-gray-100', iconColor: 'text-gray-300', popup: ['bg-gray-900', 'border', 'border-gray-700'], popupButton: ['text-gray-300', 'hover:bg-white/10', 'hover:text-white'], sidebar: ['bg-black/10', 'border-white/10'], historyActive: ['bg-blue-800/50'], historyHover: ['hover:bg-blue-800/30'], form: ['bg-black/30', 'border-white/20'], headerPill: [], aiMessage: ['text-gray-100'], userMessage: ['bg-blue-600', 'text-white'], inputColor: ['text-gray-200', 'placeholder-gray-500'] },
     light: { bg: ['bg-white'], text: 'text-black', subtleText: 'text-gray-600', logo: 'text-blue-500', iconColor: 'text-gray-800', popup: ['bg-white', 'border', 'border-gray-200', 'shadow-lg'], popupButton: ['text-gray-700', 'hover:bg-gray-100'], sidebar: ['bg-gray-50', 'border-r', 'border-gray-200'], historyActive: ['bg-blue-100'], historyHover: ['hover:bg-gray-200'], form: ['bg-gray-100', 'border', 'border-gray-300', 'shadow'], headerPill: [], aiMessage: ['text-black'], userMessage: ['bg-blue-500', 'text-white'], inputColor: ['text-black', 'placeholder-gray-400'] },
@@ -177,7 +184,7 @@ const themeColors = {
 };
 
 //=====================================================================//
-// 3. CORE FUNCTIONS (Logic cốt lõi)                                   //
+// 3. CORE FUNCTIONS                                                 //
 //=====================================================================//
 
 function escapeHTML(str) {
@@ -198,6 +205,21 @@ function initializeApp() {
     const s = localStorage.getItem('chatHistories');
     chatHistories = s ? JSON.parse(s) : {};
     startNewChat(); 
+}
+
+// --- [FIX 2] UPDATE TOKEN UI FUNCTION ---
+function updateTokenUI() {
+    if (tokenConfig.IS_INFINITE) {
+        if (tokenInputsContainer) tokenInputsContainer.classList.add('hidden');
+        if (tokenInfinity) tokenInfinity.classList.remove('hidden');
+        return;
+    }
+    if (tokenInputsContainer) tokenInputsContainer.classList.remove('hidden');
+    if (tokenInfinity) tokenInfinity.classList.add('hidden');
+
+    const currentTokens = parseInt(localStorage.getItem('userTokens') || '0');
+    if (currentTokenInput) currentTokenInput.textContent = currentTokens;
+    if (maxTokenInput) maxTokenInput.textContent = tokenConfig.MAX_TOKENS;
 }
 
 function applyTheme(theme) {
@@ -322,7 +344,7 @@ function switchLanguage(lang) {
     updateModelButtonText();
     setGreeting();
     renderHistoryList();
-    updateTokenUI();
+    updateTokenUI(); // Now this function exists!
 }
 
 function setGreeting() {
@@ -414,7 +436,7 @@ if(modelButton) modelButton.onclick = (e) => { e.stopPropagation(); showInitialM
 document.onclick = (e) => { if(modelPopup && !modelButton.contains(e.target)) modelPopup.classList.add('hidden'); };
 
 //=====================================================================//
-// 4. CHAT LOGIC & RENDER                                              //
+// 4. CHAT LOGIC & RENDER                                            //
 //=====================================================================//
 
 function shouldShowSearchStatus(text) {
@@ -521,9 +543,10 @@ function createMessageElement(messageContent, sender) {
     return row;
 }
 
+// --- [FIX 4] MATH RENDER SAFETY ---
 function renderMath(element) {
-    if (window.renderMathInElement) {
-        renderMathInElement(element, {
+    if (typeof window.renderMathInElement === 'function') {
+        window.renderMathInElement(element, {
             delimiters: [
                 {left: '$$', right: '$$', display: true},
                 {left: '$', right: '$', display: false},
@@ -550,10 +573,10 @@ async function typeWriterEffect(text, element) {
     element.innerHTML = formatAIResponse(text);
 }
 
-// API STREAMING (CÓ TIMEOUT 60S & XỬ LÝ LỖI)
+// --- [FIX 3] API STREAMING (URL & ERROR HANDLING) ---
 async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
-    const isLocal = location.hostname === 'localhost' || location.protocol === 'file:';
-    const API_URL = isLocal ? '/api/handler' : '/api/handler';
+    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    const API_URL = isLocal ? '/api/chat' : '/api/handler';
 
     try {
         const controller = new AbortController();
@@ -563,7 +586,12 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ modelName, messages, max_tokens: 2000, temperature: 0.7 }),
+            body: JSON.stringify({ 
+                model: modelName, 
+                messages: messages, 
+                max_tokens: 2000, 
+                temperature: 0.7 
+            }),
             signal: combinedSignal
         });
 
@@ -576,7 +604,8 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
         }
 
         const data = await response.json();
-        const fullText = (data && data.content) ? data.content : ""; 
+        // Fallback checks
+        const fullText = data.content || (data.choices && data.choices[0]?.message?.content) || ""; 
         
         await typeWriterEffect(fullText, aiMessageEl.firstChild);
         return fullText;
@@ -598,7 +627,7 @@ async function streamAIResponse(modelName, messages, aiMessageEl, signal) {
     }
 }
 
-// SUBMIT HANDLER (KÈM TRAINING SYSTEM PROMPT)
+// SUBMIT HANDLER
 if(chatFormEl) {
     chatFormEl.addEventListener('submit', async function(event) {
         event.preventDefault();
@@ -675,7 +704,6 @@ if(chatFormEl) {
                 { role: 'system', content: systemContent },
                 ...conversationHistory
             ];
-            // ----------------------------------------------------
 
             const fullAiResponse = await streamAIResponse(modelToUse, messagesPayload, aiEl, abortController.signal);
             
@@ -706,11 +734,6 @@ function setInputActive(isActive) {
 }
 
 // Token (Minimal)
-const currentTokenInput = getEl('current-token-input');
-const maxTokenInput = getEl('max-token-input');
-const tokenInputsContainer = getEl('token-inputs-container');
-const tokenInfinity = getEl('token-infinity');
-
 function initTokenSystem() {
     if(tokenInputsContainer) tokenInputsContainer.classList.add('hidden');
     if(tokenInfinity) tokenInfinity.classList.remove('hidden');
@@ -729,12 +752,16 @@ function consumeToken() {
 
 // Other UI Events
 if(stopButton) stopButton.onclick = () => { if (abortController) abortController.abort(); };
+
+// --- [FIX 1] Random Prompt Handler ---
 if(randomPromptBtn) randomPromptBtn.onclick = () => {
     if (isRandomPromptUsedInSession) return;
+    // Sử dụng biến randomPrompts đã được định nghĩa ở trên
     const prompts = randomPrompts[currentLang] || randomPrompts['vi'];
     messageInput.value = prompts[Math.floor(Math.random() * prompts.length)];
     chatFormEl.dispatchEvent(new Event('submit'));
 };
+
 if(videoBtn) videoBtn.onclick = () => alert(translations[currentLang].comingSoon);
 if(learnBtn) learnBtn.onclick = () => {
     isTutorMode = !isTutorMode; 
