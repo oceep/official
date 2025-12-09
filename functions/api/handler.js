@@ -220,7 +220,7 @@ export async function onRequestPost(context) {
     const apiConfig = {
       Mini: { 
           key: env.MINI_API_KEY, 
-          model: 'meta-llama/llama-3.3-70b-instruct:free'
+          model: 'z-ai/glm-4.5-air:free'
       },
       Smart: { 
           key: env.SMART_API_KEY, 
