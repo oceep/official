@@ -39,39 +39,9 @@ function cleanResponse(text) {
 // 1. SMART ROUTER (Decision Layer)
 // ----------------------------
 async function analyzeRequest(userPrompt, apiKey, debugSteps) {
-  const lower = userPrompt.toLowerCase();
+  // Đã xóa toàn bộ Keyword Rules (Skip/Force) cho gọn code.
+  // Bây giờ phụ thuộc hoàn toàn vào AI Decision.
 
-  // 1.1 SKIP RULES (Tuyệt đối không tìm kiếm)
-  const skipTriggers = [
-      'viết', 'write', 'dịch', 'translate', 'code', 'lập trình', 'tính', 'calculate', 
-      'giải', 'solve', 'tạo', 'create', 'sáng tác', 'compose', 'check', 'kiểm tra lỗi',
-      'viet', 'dich', 'lap trinh', 'tinh', 'giai', 'tao', 'sang tac', 'kiem tra', 'sua loi',
-      'fix', 'debug', 'html', 'css', 'javascript', 'python'
-  ];
-  if (skipTriggers.some(w => lower.startsWith(w))) {
-      debugSteps.push({ router: 'skip_rule', msg: 'Skipping search' });
-      return { needed: false, query: '' };
-  }
-
-  // 1.2 FORCE RULES (Bắt buộc tìm kiếm - Đã bao gồm từ không dấu)
-  const forceTriggers = [
-      'thời tiết', 'weather', 'giá', 'price', 'tin tức', 'news', 'sự kiện', 'event',
-      'tỷ số', 'score', 'lịch thi đấu', 'schedule', 'kết quả', 'result',
-      'ở đâu', 'location', 'địa chỉ', 'address', 'review', 'đánh giá',
-      'hom nay', 'hôm nay', 'moi nhat', 'mới nhất', 'bao nhieu', 'ty gia',
-      'ai la', 'who is', 'cai gi', 'what is',
-      // KHÔNG DẤU (Critical fix)
-      'thoi tiet', 'gia', 'tin tuc', 'su kien', 'ty so', 'ket qua',
-      'o dau', 'dia chi', 'danh gia', 'review'
-  ];
-
-  if (forceTriggers.some(w => lower.includes(w))) {
-      debugSteps.push({ router: 'force_rule', msg: 'Forcing search' });
-      return { needed: true, query: userPrompt };
-  }
-
-  // 1.3 AI DECISION (Trinity Mini)
-  // Nếu không có API Key riêng cho Decision, bỏ qua bước này để tránh lỗi
   if (!apiKey) {
       debugSteps.push({ router: 'missing_key', msg: 'No DECIDE_API_KEY provided' });
       return { needed: false, query: '' };
@@ -85,7 +55,7 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
             role: 'system', 
             content: `You are a Search Decision tool.
             Output JSON ONLY: { "needed": boolean, "query": "string" }
-            - needed: true if user asks for Real-time Info, Address, Weather, News.
+            - needed: true if user asks for Real-time Info, Address, Weather, News, Facts.
             - needed: false for Chat, Code, Creative Writing.
             Query: keyword for Google.`
         },
@@ -95,7 +65,6 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
       temperature: 0
     };
     
-    // Gọi OpenRouter với apiKey được truyền vào (DECIDE_API_KEY)
     const res = await safeFetch(OPENROUTER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -112,6 +81,7 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
         const jsonStr = jsonMatch ? jsonMatch[0] : content;
         parsed = JSON.parse(jsonStr); 
     } catch (e) { 
+        // Lỗi parse JSON -> mặc định FALSE
         parsed = { needed: false, query: userPrompt }; 
     }
 
@@ -215,9 +185,18 @@ export async function onRequestPost(context) {
 
     // --- CONFIG MODEL ---
     const apiConfig = {
-      Mini: { key: env.MINI_API_KEY, model: 'openai/gpt-oss-20b:free' },
-      Smart: { key: env.SMART_API_KEY, model: 'google/gemini-2.0-flash-exp:free' },
-      Nerd: { key: env.NERD_API_KEY, model: 'thudm/glm-4-9b-chat:free' }
+      Mini: { 
+          key: env.MINI_API_KEY, 
+          model: 'openai/gpt-oss-20b:free' // Đã đổi model theo yêu cầu
+      },
+      Smart: { 
+          key: env.SMART_API_KEY, 
+          model: 'google/gemini-2.0-flash-exp:free' 
+      },
+      Nerd: { 
+          key: env.NERD_API_KEY, 
+          model: 'thudm/glm-4-9b-chat:free' 
+      }
     };
 
     const config = apiConfig[modelName];
@@ -228,9 +207,7 @@ export async function onRequestPost(context) {
     let searchContext = '';
 
     // --- B1: PHÂN TÍCH (ROUTER) ---
-    // Lấy Key riêng cho Decision Model. Nếu user chưa đặt, fallback về SMART_API_KEY
     const decisionKey = env.DECIDE_API_KEY || env.SMART_API_KEY; 
-    
     const analysis = await analyzeRequest(lastMsg, decisionKey, debug.steps);
 
     // --- B2: TÌM KIẾM ---
@@ -259,17 +236,15 @@ ${searchContext}
 
 [INSTRUCTION]
 Answer using the search results above. 
-If the search results have the specific address/info requested, provide it exactly.
 Cite sources like [1].
 Current Date: ${new Date().toLocaleDateString('vi-VN')}
 `;
     } else if (analysis.needed && !searchContext) {
-        // Trường hợp cần tìm mà không có kết quả -> Nhắc AI cẩn thận
         const lastIdx = finalMessages.length - 1;
         finalMessages[lastIdx].content = `
 User Query: "${lastMsg}"
 [SYSTEM NOTE]
-Search engines found no results. Use internal knowledge but DO NOT hallucinate addresses or fake facts. If you don't know, say so.
+Search engines found no results. Use internal knowledge but DO NOT hallucinate addresses or fake facts.
 `;
     }
 
