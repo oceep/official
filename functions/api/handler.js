@@ -39,9 +39,6 @@ function cleanResponse(text) {
 // 1. SMART ROUTER (Decision Layer)
 // ----------------------------
 async function analyzeRequest(userPrompt, apiKey, debugSteps) {
-  // Đã xóa toàn bộ Keyword Rules (Skip/Force) cho gọn code.
-  // Bây giờ phụ thuộc hoàn toàn vào AI Decision.
-
   if (!apiKey) {
       debugSteps.push({ router: 'missing_key', msg: 'No DECIDE_API_KEY provided' });
       return { needed: false, query: '' };
@@ -81,7 +78,6 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
         const jsonStr = jsonMatch ? jsonMatch[0] : content;
         parsed = JSON.parse(jsonStr); 
     } catch (e) { 
-        // Lỗi parse JSON -> mặc định FALSE
         parsed = { needed: false, query: userPrompt }; 
     }
 
@@ -95,7 +91,7 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
 }
 
 // ----------------------------
-// 2. SEARCH LAYER (SerpAPI)
+// 2. SEARCH LAYER (SerpAPI with Google AI Mode)
 // ----------------------------
 async function searchSerpApi(query, apiKey, debugSteps) {
     if (!apiKey) {
@@ -110,7 +106,9 @@ async function searchSerpApi(query, apiKey, debugSteps) {
             api_key: apiKey,
             num: "5", 
             hl: "vi", 
-            gl: "vn"
+            gl: "vn",
+            google_domain: "google.com",
+            udm: "14" // Enable Google AI Mode
         });
 
         const res = await safeFetch(`${SERPAPI_URL}?${params.toString()}`, {
@@ -126,7 +124,16 @@ async function searchSerpApi(query, apiKey, debugSteps) {
         const data = await res.json();
         let results = [];
 
-        // 2.1 Answer Box
+        // 2.1 AI Overview (Google AI Mode primary result)
+        if (data.ai_overview) {
+            results.push({
+                title: "Google AI Overview",
+                link: "",
+                content: data.ai_overview
+            });
+        }
+
+        // 2.2 Answer Box
         if (data.answer_box) {
             let answer = data.answer_box.snippet || data.answer_box.answer || data.answer_box.result;
             if (answer) {
@@ -138,7 +145,7 @@ async function searchSerpApi(query, apiKey, debugSteps) {
             }
         }
 
-        // 2.2 Knowledge Graph
+        // 2.3 Knowledge Graph
         if (data.knowledge_graph) {
              results.push({
                 title: data.knowledge_graph.title || "Info",
@@ -147,7 +154,7 @@ async function searchSerpApi(query, apiKey, debugSteps) {
             });
         }
 
-        // 2.3 Organic Results
+        // 2.4 Organic Results
         if (data.organic_results && Array.isArray(data.organic_results)) {
             data.organic_results.forEach(r => {
                 let text = r.snippet || "";
@@ -187,7 +194,7 @@ export async function onRequestPost(context) {
     const apiConfig = {
       Mini: { 
           key: env.MINI_API_KEY, 
-          model: 'meta-llama/llama-3.3-70b-instruct:free' // Đã đổi model theo yêu cầu
+          model: 'openai/gpt-oss-20b:free'
       },
       Smart: { 
           key: env.SMART_API_KEY, 
@@ -214,7 +221,7 @@ export async function onRequestPost(context) {
     if (analysis.needed) {
         const results = await searchSerpApi(analysis.query, env.SERPAPI_KEY, debug.steps);
         if (results) {
-            toolUsed = 'Google Search (SerpAPI)';
+            toolUsed = 'Google AI Mode Search (SerpAPI)';
             searchContext = results.map((r, i) => 
                 `[${i+1}] Title: ${r.title}\n   Source: ${r.link}\n   Content: ${r.content}`
             ).join('\n\n');
@@ -231,7 +238,7 @@ export async function onRequestPost(context) {
         finalMessages[lastIdx].content = `
 User Query: "${lastMsg}"
 
-[SYSTEM DATA: GOOGLE SEARCH RESULTS]
+[SYSTEM DATA: GOOGLE AI MODE SEARCH RESULTS]
 ${searchContext}
 
 [INSTRUCTION]
