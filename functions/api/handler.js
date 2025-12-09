@@ -187,7 +187,7 @@ export async function onRequestPost(context) {
     const apiConfig = {
       Mini: { 
           key: env.MINI_API_KEY, 
-          model: 'openai/gpt-oss-20b:free' // Đã đổi model theo yêu cầu
+          model: 'meta-llama/llama-3.3-70b-instruct:free' // Đã đổi model theo yêu cầu
       },
       Smart: { 
           key: env.SMART_API_KEY, 
