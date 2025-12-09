@@ -219,7 +219,7 @@ export async function onRequestPost(context) {
     const apiConfig = {
       Mini: { 
           key: env.MINI_API_KEY, 
-          model: 'openai/gpt-oss-120b:free' 
+          model: 'openai/gpt-oss-20b:free' 
       },
       Smart: { 
           key: env.SMART_API_KEY, 
