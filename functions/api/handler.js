@@ -10,9 +10,8 @@ const corsHeaders = {
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const SERPAPI_URL = 'https://serpapi.com/search.json';
 
-// Sử dụng model thông minh và miễn phí để làm "Decision Maker"
-// Gemini Flash 2.0 Exp rất giỏi trong việc trả về JSON chuẩn xác
-const DECISION_MODEL = 'google/gemini-2.0-flash-exp:free'; 
+// Đã đổi về model arcee-ai/trinity-mini:free theo yêu cầu
+const DECISION_MODEL = 'arcee-ai/trinity-mini:free'; 
 
 // ----------------------------
 // Helpers
@@ -34,7 +33,7 @@ function cleanResponse(text) {
     if (!text) return "";
     let cleaned = text.replace(/<\|.*?\|>/g, ""); 
     cleaned = cleaned.replace(/\{"query":.*?\}/g, "");
-    cleaned = cleaned.replace(/```json/g, "").replace(/```/g, ""); // Clean markdown code blocks if any
+    cleaned = cleaned.replace(/```json/g, "").replace(/```/g, ""); // Xóa markdown code block
     return cleaned.trim();
 }
 
@@ -44,7 +43,7 @@ function cleanResponse(text) {
 async function analyzeRequest(userPrompt, apiKey, debugSteps) {
   const lower = userPrompt.toLowerCase();
 
-  // 1.1 SKIP RULES (Tuyệt đối không tìm kiếm với các tác vụ này)
+  // 1.1 SKIP RULES (Tuyệt đối không tìm kiếm)
   const skipTriggers = [
       'viết', 'write', 'dịch', 'translate', 'code', 'lập trình', 'tính', 'calculate', 
       'giải', 'solve', 'tạo', 'create', 'sáng tác', 'compose', 'check', 'kiểm tra lỗi',
@@ -52,11 +51,11 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
       'fix', 'debug', 'html', 'css', 'javascript', 'python'
   ];
   if (skipTriggers.some(w => lower.startsWith(w))) {
-      debugSteps.push({ router: 'skip_rule', msg: 'Skipping search (Creative/Coding task)' });
+      debugSteps.push({ router: 'skip_rule', msg: 'Skipping search' });
       return { needed: false, query: '' };
   }
 
-  // 1.2 FORCE RULES (Bắt buộc tìm kiếm với các từ khóa này)
+  // 1.2 FORCE RULES (Bắt buộc tìm kiếm)
   const forceTriggers = [
       'thời tiết', 'weather', 'giá', 'price', 'tin tức', 'news', 'sự kiện', 'event',
       'tỷ số', 'score', 'lịch thi đấu', 'schedule', 'kết quả', 'result',
@@ -66,31 +65,31 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
   ];
 
   if (forceTriggers.some(w => lower.includes(w))) {
-      debugSteps.push({ router: 'force_rule', msg: 'Forcing search (Info keyword detected)' });
+      debugSteps.push({ router: 'force_rule', msg: 'Forcing search' });
       return { needed: true, query: userPrompt };
   }
 
-  // 1.3 AI DECISION (Dùng AI để phán đoán)
+  // 1.3 AI DECISION (Trinity Mini)
   if (!apiKey) return { needed: false, query: '' };
 
   try {
     const payload = {
       model: DECISION_MODEL,
-      response_format: { type: "json_object" }, // Yêu cầu trả về JSON
+      // Trinity Mini đôi khi không hỗ trợ json_object mode chuẩn, nên ta bỏ response_format
+      // và dùng prompt engineering mạnh hơn để ép trả về JSON.
       messages: [
         { 
             role: 'system', 
-            content: `You are a Search Decision Agent. Analyze the user prompt.
-            Return JSON: { "needed": boolean, "query": "string" }
-            - "needed": true if the user asks for real-time information, news, weather, facts, prices, or external data.
-            - "needed": false if the user asks for coding, creative writing, translation, chit-chat, or general knowledge.
-            - "query": optimize the search query for Google if needed.
-            Example: User "Ai thắng trận MU hôm qua?" -> {"needed": true, "query": "Manchester United result yesterday"}
-            Example: User "Viết code web" -> {"needed": false, "query": ""}`
+            content: `You are a Search Decision tool.
+            Output ONLY valid JSON: { "needed": boolean, "query": "string" }
+            - "needed": true for real-time news, weather, prices, facts.
+            - "needed": false for chat, coding, translation.
+            - "query": simple keyword for Google.
+            DO NOT explain.`
         },
         { role: 'user', content: userPrompt }
       ],
-      max_tokens: 100,
+      max_tokens: 60,
       temperature: 0
     };
     
@@ -98,7 +97,7 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(payload)
-    }, 5000); // 5s Timeout cho việc quyết định
+    }, 5000); 
     
     if (!res.ok) throw new Error('Router API failed');
     const data = await res.json();
@@ -106,9 +105,12 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
     
     let parsed;
     try { 
-        parsed = JSON.parse(content); 
+        // Trinity Mini có thể trả về text thừa, cố gắng tìm chuỗi JSON
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        const jsonStr = jsonMatch ? jsonMatch[0] : content;
+        parsed = JSON.parse(jsonStr); 
     } catch (e) { 
-        // Nếu AI trả về định dạng sai, coi như không tìm kiếm
+        // Lỗi parse JSON -> mặc định FALSE
         parsed = { needed: false, query: userPrompt }; 
     }
 
@@ -116,7 +118,7 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
     return parsed;
 
   } catch (e) {
-    // 1.4 ERROR FALLBACK (Yêu cầu của bạn: Lỗi -> Mặc định KHÔNG tìm kiếm)
+    // 1.4 ERROR FALLBACK (Lỗi -> Mặc định KHÔNG tìm kiếm)
     debugSteps.push({ router: 'error_fallback', error: e.message, msg: 'Defaulting to FALSE' });
     return { needed: false, query: userPrompt };
   }
@@ -132,14 +134,13 @@ async function searchSerpApi(query, apiKey, debugSteps) {
     }
 
     try {
-        // Construct URL with query parameters
         const params = new URLSearchParams({
             engine: "google",
             q: query,
             api_key: apiKey,
-            num: "5", // Lấy top 5 kết quả
-            hl: "vi", // Ưu tiên ngôn ngữ Việt (hoặc 'en' tùy bạn)
-            gl: "vn"  // Ưu tiên vị trí Việt Nam
+            num: "5", 
+            hl: "vi", 
+            gl: "vn"
         });
 
         const res = await safeFetch(`${SERPAPI_URL}?${params.toString()}`, {
@@ -155,12 +156,12 @@ async function searchSerpApi(query, apiKey, debugSteps) {
         const data = await res.json();
         let results = [];
 
-        // 2.1 Ưu tiên Answer Box (Câu trả lời trực tiếp của Google)
+        // 2.1 Ưu tiên Answer Box
         if (data.answer_box) {
             let answer = "";
             if (data.answer_box.snippet) answer = data.answer_box.snippet;
             else if (data.answer_box.answer) answer = data.answer_box.answer;
-            else if (data.answer_box.result) answer = data.answer_box.result; // Cho các phép tính/tỷ giá
+            else if (data.answer_box.result) answer = data.answer_box.result;
 
             if (answer) {
                 results.push({
@@ -171,7 +172,7 @@ async function searchSerpApi(query, apiKey, debugSteps) {
             }
         }
 
-        // 2.2 Knowledge Graph (Bảng thông tin bên phải)
+        // 2.2 Knowledge Graph
         if (data.knowledge_graph) {
             results.push({
                 title: data.knowledge_graph.title || "Knowledge Graph",
@@ -180,7 +181,7 @@ async function searchSerpApi(query, apiKey, debugSteps) {
             });
         }
 
-        // 2.3 Organic Results (Kết quả tìm kiếm tự nhiên)
+        // 2.3 Organic Results
         if (data.organic_results && Array.isArray(data.organic_results)) {
             data.organic_results.forEach(r => {
                 results.push({
@@ -218,7 +219,7 @@ export async function onRequestPost(context) {
     const apiConfig = {
       Mini: { 
           key: env.MINI_API_KEY, 
-          model: 'qwen/qwen-2.5-7b-instruct:free' 
+          model: 'openai/gpt-oss-120b:free' 
       },
       Smart: { 
           key: env.SMART_API_KEY, 
@@ -244,7 +245,6 @@ export async function onRequestPost(context) {
 
     // --- B2: GỌI SERPAPI (GOOGLE) ---
     if (analysis.needed) {
-        // Lưu ý: Cần thêm biến môi trường SERPAPI_KEY
         const results = await searchSerpApi(analysis.query, env.SERPAPI_KEY, debug.steps);
         if (results) {
             toolUsed = 'Google Search (SerpAPI)';
@@ -256,7 +256,7 @@ export async function onRequestPost(context) {
         }
     }
 
-    // --- B3: CHUẨN BỊ CONTEXT CHO AI ---
+    // --- B3: CHUẨN BỊ CONTEXT ---
     const finalMessages = [...messages];
 
     if (searchContext) {
@@ -268,16 +268,14 @@ User Query: "${lastMsg}"
 ${searchContext}
 
 [INSTRUCTION]
-Answer the user's query using the information above. 
-If the search results answer the question, cite the source number like [1] or [2].
-If the search results are irrelevant, ignore them and answer with your internal knowledge.
+Answer using the search results above.
+Cite sources like [1].
 Current Date: ${new Date().toLocaleDateString('vi-VN')}
 `;
     }
 
-    // Clean System Prompt
     const cleanMessages = finalMessages.filter(m => m.role !== 'system');
-    cleanMessages.unshift({ role: 'system', content: 'You are Oceep. Helpful, direct and accurate.' });
+    cleanMessages.unshift({ role: 'system', content: 'You are Oceep. Helpful and accurate.' });
 
     // --- B4: GỌI MODEL TRẢ LỜI ---
     const modelRes = await safeFetch(OPENROUTER_URL, {
