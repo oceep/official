@@ -91,9 +91,9 @@ async function analyzeRequest(userPrompt, apiKey, debugSteps) {
 }
 
 // ----------------------------
-// 2. SEARCH LAYER (SerpAPI with Google AI Mode)
+// 2. SEARCH LAYER (Google AI Mode via SerpAPI)
 // ----------------------------
-async function searchSerpApi(query, apiKey, debugSteps) {
+async function searchGoogleAIMode(query, apiKey, debugSteps) {
     if (!apiKey) {
         debugSteps.push({ serp_error: 'MISSING_SERPAPI_KEY' });
         return null;
@@ -101,14 +101,11 @@ async function searchSerpApi(query, apiKey, debugSteps) {
 
     try {
         const params = new URLSearchParams({
-            engine: "google",
+            engine: "google_ai_overview",  // Google AI Mode
             q: query,
             api_key: apiKey,
-            num: "5", 
             hl: "vi", 
-            gl: "vn",
-            google_domain: "google.com",
-            udm: "14" // Enable Google AI Mode
+            gl: "vn"
         });
 
         const res = await safeFetch(`${SERPAPI_URL}?${params.toString()}`, {
@@ -124,17 +121,46 @@ async function searchSerpApi(query, apiKey, debugSteps) {
         const data = await res.json();
         let results = [];
 
-        // 2.1 AI Overview (Google AI Mode primary result)
+        debugSteps.push({ search_engine: 'google_ai_overview', query: query });
+
+        // 2.1 AI Overview (Main content from Google AI Mode)
         if (data.ai_overview) {
-            results.push({
-                title: "Google AI Overview",
-                link: "",
-                content: data.ai_overview
-            });
+            // Text blocks from AI Overview
+            if (data.ai_overview.text_blocks && Array.isArray(data.ai_overview.text_blocks)) {
+                data.ai_overview.text_blocks.forEach((block, idx) => {
+                    if (block.snippet || block.text) {
+                        results.push({
+                            title: `AI Overview ${idx + 1}`,
+                            link: block.link || "",
+                            content: block.snippet || block.text || ""
+                        });
+                    }
+                });
+            }
+            
+            // Direct snippet/answer from AI Overview
+            if (data.ai_overview.snippet || data.ai_overview.answer) {
+                results.push({
+                    title: "Google AI Answer",
+                    link: "",
+                    content: data.ai_overview.snippet || data.ai_overview.answer
+                });
+            }
+
+            // Sources from AI Overview
+            if (data.ai_overview.sources && Array.isArray(data.ai_overview.sources)) {
+                data.ai_overview.sources.slice(0, 3).forEach(src => {
+                    results.push({
+                        title: src.title || "Source",
+                        link: src.link || "",
+                        content: src.snippet || src.description || ""
+                    });
+                });
+            }
         }
 
-        // 2.2 Answer Box
-        if (data.answer_box) {
+        // 2.2 Answer Box (fallback)
+        if (data.answer_box && results.length === 0) {
             let answer = data.answer_box.snippet || data.answer_box.answer || data.answer_box.result;
             if (answer) {
                 results.push({
@@ -145,8 +171,8 @@ async function searchSerpApi(query, apiKey, debugSteps) {
             }
         }
 
-        // 2.3 Knowledge Graph
-        if (data.knowledge_graph) {
+        // 2.3 Knowledge Graph (fallback)
+        if (data.knowledge_graph && results.length === 0) {
              results.push({
                 title: data.knowledge_graph.title || "Info",
                 link: data.knowledge_graph.source?.link || "",
@@ -154,8 +180,8 @@ async function searchSerpApi(query, apiKey, debugSteps) {
             });
         }
 
-        // 2.4 Organic Results
-        if (data.organic_results && Array.isArray(data.organic_results)) {
+        // 2.4 Organic Results (fallback)
+        if (data.organic_results && Array.isArray(data.organic_results) && results.length === 0) {
             data.organic_results.forEach(r => {
                 let text = r.snippet || "";
                 if (r.address) text += ` Address: ${r.address}`;
@@ -194,7 +220,7 @@ export async function onRequestPost(context) {
     const apiConfig = {
       Mini: { 
           key: env.MINI_API_KEY, 
-          model: 'openai/gpt-oss-20b:free'
+          model: 'meta-llama/llama-3.3-70b-instruct:free'
       },
       Smart: { 
           key: env.SMART_API_KEY, 
@@ -217,11 +243,11 @@ export async function onRequestPost(context) {
     const decisionKey = env.DECIDE_API_KEY || env.SMART_API_KEY; 
     const analysis = await analyzeRequest(lastMsg, decisionKey, debug.steps);
 
-    // --- B2: TÌM KIẾM ---
+    // --- B2: TÌM KIẾM (Google AI Mode) ---
     if (analysis.needed) {
-        const results = await searchSerpApi(analysis.query, env.SERPAPI_KEY, debug.steps);
+        const results = await searchGoogleAIMode(analysis.query, env.SERPAPI_KEY, debug.steps);
         if (results) {
-            toolUsed = 'Google AI Mode Search (SerpAPI)';
+            toolUsed = 'Google AI Mode (SerpAPI)';
             searchContext = results.map((r, i) => 
                 `[${i+1}] Title: ${r.title}\n   Source: ${r.link}\n   Content: ${r.content}`
             ).join('\n\n');
@@ -238,7 +264,7 @@ export async function onRequestPost(context) {
         finalMessages[lastIdx].content = `
 User Query: "${lastMsg}"
 
-[SYSTEM DATA: GOOGLE AI MODE SEARCH RESULTS]
+[SYSTEM DATA: GOOGLE AI MODE RESULTS]
 ${searchContext}
 
 [INSTRUCTION]
