@@ -1,0 +1,5 @@
+{
+  "name": "Oceep AI - Modern Chat",
+  "description": "A minimalist, modern AI chat interface with real-time web search capabilities using Google Gemini.",
+  "requestFramePermissions": []
+}
