@@ -1,131 +1,105 @@
 /**
- * handler.js - Serverless Proxy for Gemini API
- * Designed for Cloudflare Workers or similar ES Module environments.
+ * handler.js - Node.js Server
+ * Chạy bằng lệnh: node handler.js
  */
+import { createServer } from 'http';
+import { GoogleGenAI } from '@google/genai';
+import dotenv from 'dotenv';
 
-export default {
-  async fetch(request, env, ctx) {
-    // 1. Handle CORS Preflight
-    if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type",
-        },
-      });
+// Cấu hình
+dotenv.config({ path: '.env.local' }); // Đọc file .env.local chứa GEMINI_API_KEY
+const PORT = 3000;
+const API_KEY = process.env.GEMINI_API_KEY;
+
+if (!API_KEY || API_KEY === 'PLACEHOLDER_API_KEY') {
+    console.error("❌ LỖI: Chưa có GEMINI_API_KEY trong file .env.local");
+    process.exit(1);
+}
+
+const ai = new GoogleGenAI({ apiKey: API_KEY });
+
+const server = createServer(async (req, res) => {
+    // 1. CORS Headers (Cho phép script.js gọi vào)
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
     }
 
-    // 2. Only allow POST
-    if (request.method !== "POST") {
-      return new Response("Method Not Allowed", { status: 405 });
+    if (req.url === '/api/chat' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { history, newMessage, useSearch, image } = JSON.parse(body);
+
+                // Chuẩn bị dữ liệu gửi cho Gemini
+                const contents = history.map(msg => ({
+                    role: msg.role === 'user' ? 'user' : 'model',
+                    parts: [{ text: msg.content }]
+                }));
+
+                const currentParts = [{ text: newMessage }];
+                if (image) {
+                    currentParts.unshift({
+                        inlineData: {
+                            mimeType: image.match(/data:([^;]+);/)?.[1] || 'image/jpeg',
+                            data: image.split(',')[1]
+                        }
+                    });
+                }
+                contents.push({ role: 'user', parts: currentParts });
+
+                const tools = useSearch ? [{ googleSearch: {} }] : [];
+
+                // Gọi Gemini Streaming
+                const result = await ai.models.generateContentStream({
+                    model: 'gemini-2.0-flash-exp', // Hoặc 'gemini-1.5-flash'
+                    contents: contents,
+                    config: { tools, systemInstruction: "Bạn là Oceep AI. Trả lời ngắn gọn, hữu ích." }
+                });
+
+                // Trả về stream cho script.js (dạng NDJSON)
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+
+                for await (const chunk of result.stream) {
+                    const chunkText = chunk.text();
+                    const groundingMeta = chunk.candidates?.[0]?.groundingMetadata;
+                    
+                    // Gửi text
+                    if (chunkText) {
+                        res.write(JSON.stringify({ text: chunkText }) + '\n');
+                    }
+                    
+                    // Gửi nguồn (nếu có)
+                    if (groundingMeta?.groundingChunks) {
+                         const sources = groundingMeta.groundingChunks
+                            .filter(c => c.web?.uri && c.web?.title)
+                            .map(c => ({ uri: c.web.uri, title: c.web.title }));
+                         if (sources.length > 0) {
+                             res.write(JSON.stringify({ sources: sources }) + '\n');
+                         }
+                    }
+                }
+                res.end();
+
+            } catch (error) {
+                console.error("Lỗi xử lý:", error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ text: "\n[Lỗi Server: " + error.message + "]" }));
+            }
+        });
+    } else {
+        res.writeHead(404);
+        res.end("Not Found");
     }
+});
 
-    // 3. Get Payload
-    let body;
-    try {
-      body = await request.json();
-    } catch (e) {
-      return new Response("Invalid JSON", { status: 400 });
-    }
-
-    const { history, newMessage, useSearch, image } = body;
-    const apiKey = env.GEMINI_API_KEY; // Ensure this is set in your environment
-    const model = "gemini-2.0-flash-exp"; // Or gemini-1.5-flash
-
-    if (!apiKey) {
-      return new Response("Server Misconfiguration: Missing API Key", { status: 500 });
-    }
-
-    // 4. Construct Gemini API Payload
-    // Convert Frontend 'history' to Gemini 'contents' format
-    const contents = history.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content }]
-      // Note: Previous images in history are omitted for token efficiency in this simple version
-    }));
-
-    // Add current message
-    const currentParts = [{ text: newMessage }];
-    
-    // Add Image if present (Base64)
-    if (image) {
-      const base64Data = image.split(',')[1] || image;
-      const mimeType = image.match(/data:([^;]+);/)?.[1] || 'image/jpeg';
-      currentParts.unshift({
-        inline_data: {
-          mime_type: mimeType,
-          data: base64Data
-        }
-      });
-    }
-
-    contents.push({ role: "user", parts: currentParts });
-
-    // Tools (Google Search)
-    const tools = useSearch ? [{ google_search: {} }] : [];
-    
-    // System Instruction
-    const systemInstruction = {
-        parts: [{ text: "You are Oceep, a helpful AI assistant. Answer concisely. If using search, cite sources clearly." }]
-    };
-
-    // 5. Call Google API
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}`;
-    
-    const googleResponse = await fetch(apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents,
-        tools,
-        system_instruction: systemInstruction,
-        generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 2048
-        }
-      })
-    });
-
-    if (!googleResponse.ok) {
-        const errText = await googleResponse.text();
-        return new Response(`Gemini API Error: ${errText}`, { status: googleResponse.status });
-    }
-
-    // 6. Stream Transform
-    // We need to parse the incoming JSON stream from Google and forward clean chunks to frontend
-    const { readable, writable } = new TransformStream();
-    const writer = writable.getWriter();
-    const reader = googleResponse.body.getReader();
-    const decoder = new TextDecoder();
-    const encoder = new TextEncoder();
-
-    // Background processing to not block the return
-    ctx.waitUntil((async () => {
-      try {
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          buffer += decoder.decode(value, { stream: true });
-          
-          if (buffer.includes('"text":'))
-          }
-        }
-      } catch (e) {
-        console.error("Stream error", e);
-      } finally {
-        writer.close();
-      }
-    })());
-  
-    return new Response(googleResponse.body, {
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*", // Fix CORS
-      }
-    });
-    // Note: script.js will need to handle the Google format (which is effectively JSON array chunks)
-  }
-};
+server.listen(PORT, () => {
+    console.log(`✅ Server đang chạy tại http://localhost:${PORT}`);
+    console.log(`➡️  Mở file index.html để bắt đầu chat.`);
+});
