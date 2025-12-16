@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác thực bảo mật by Oceep</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Hiệu ứng nền mờ ảo */
+        .bg-glass {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center h-screen overflow-hidden relative">
+
+    <div class="absolute top-0 left-0 w-full h-full overflow-hidden -z-10">
+        <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full blur-[100px]"></div>
+        <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/20 rounded-full blur-[100px]"></div>
+    </div>
+
+    <div class="bg-glass p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center flex flex-col items-center gap-6 animate-fade-up">
+        
+        <div class="flex items-center justify-center scale-125 mb-2">
+            <svg width="60" height="60" viewBox="0 0 100 100">
+                <defs>
+                    <radialGradient id="bubbleGradient" cx="0.3" cy="0.3" r="0.7">
+                        <stop offset="0%" style="stop-color:rgb(220,240,255);stop-opacity:1" />
+                        <stop offset="100%" style="stop-color:rgb(51, 149, 240);stop-opacity:1" />
+                    </radialGradient>
+                </defs>
+                <circle cx="50" cy="50" r="45" fill="url(#bubbleGradient)" stroke="rgba(255,255,255,0.7)" stroke-width="3"/>
+                <path d="M 35 30 A 25 25 0 0 1 60 55" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="5" stroke-linecap="round"/>
+            </svg>
+            <span class="text-blue-400 text-3xl ml-1 font-bold">ceep</span>
+        </div>
+
+        <div>
+            <h1 class="text-xl font-bold mb-1">Kiểm tra bảo mật</h1>
+            <p class="text-gray-400 text-sm">Vui lòng xác minh bạn là con người.</p>
+        </div>
+
+        <div class="cf-turnstile" 
+             data-sitekey="0x4AAAAAACDQ1qiaIDuILPqt" 
+             data-callback="onTurnstileSuccess" 
+             data-theme="dark">
+        </div>
+
+    </div>
+
+    <script>
+        // Hàm này được gọi tự động khi Turnstile xác thực thành công
+        function onTurnstileSuccess(token) {
+            // 1. Mở khóa (Xóa cờ hiệu khóa)
+            localStorage.removeItem('isLocked');
+            
+            // 2. Reset các bộ đếm để bắt đầu chu kỳ mới
+            localStorage.setItem('appUsageCount', '0');
+            localStorage.removeItem('verificationLimit'); // Xóa limit cũ để tạo random mới lần sau
+
+            // 3. Chuyển hướng về trang chủ sau 0.5 giây
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 500);
+        }
+
+        // Logic tự vệ: Nếu người dùng vào trang này mà không bị khóa, tự đẩy về index
+        if (localStorage.getItem('isLocked') !== 'true') {
+             window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>
